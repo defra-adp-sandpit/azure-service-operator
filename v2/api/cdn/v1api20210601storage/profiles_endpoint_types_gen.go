@@ -4,19 +4,18 @@
 package v1api20210601storage
 
 import (
+	"fmt"
+	v20230501s "github.com/Azure/azure-service-operator/v2/api/cdn/v1api20230501storage"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/conversion"
 )
-
-// +kubebuilder:rbac:groups=cdn.azure.com,resources=profilesendpoints,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=cdn.azure.com,resources={profilesendpoints/status,profilesendpoints/finalizers},verbs=get;update;patch
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Severity",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].severity"
 // +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].reason"
@@ -42,6 +41,28 @@ func (endpoint *ProfilesEndpoint) GetConditions() conditions.Conditions {
 // SetConditions sets the conditions on the resource status
 func (endpoint *ProfilesEndpoint) SetConditions(conditions conditions.Conditions) {
 	endpoint.Status.Conditions = conditions
+}
+
+var _ conversion.Convertible = &ProfilesEndpoint{}
+
+// ConvertFrom populates our ProfilesEndpoint from the provided hub ProfilesEndpoint
+func (endpoint *ProfilesEndpoint) ConvertFrom(hub conversion.Hub) error {
+	source, ok := hub.(*v20230501s.ProfilesEndpoint)
+	if !ok {
+		return fmt.Errorf("expected cdn/v1api20230501storage/ProfilesEndpoint but received %T instead", hub)
+	}
+
+	return endpoint.AssignProperties_From_ProfilesEndpoint(source)
+}
+
+// ConvertTo populates the provided hub ProfilesEndpoint from our ProfilesEndpoint
+func (endpoint *ProfilesEndpoint) ConvertTo(hub conversion.Hub) error {
+	destination, ok := hub.(*v20230501s.ProfilesEndpoint)
+	if !ok {
+		return fmt.Errorf("expected cdn/v1api20230501storage/ProfilesEndpoint but received %T instead", hub)
+	}
+
+	return endpoint.AssignProperties_To_ProfilesEndpoint(destination)
 }
 
 var _ genruntime.KubernetesResource = &ProfilesEndpoint{}
@@ -106,8 +127,75 @@ func (endpoint *ProfilesEndpoint) SetStatus(status genruntime.ConvertibleStatus)
 	return nil
 }
 
-// Hub marks that this ProfilesEndpoint is the hub type for conversion
-func (endpoint *ProfilesEndpoint) Hub() {}
+// AssignProperties_From_ProfilesEndpoint populates our ProfilesEndpoint from the provided source ProfilesEndpoint
+func (endpoint *ProfilesEndpoint) AssignProperties_From_ProfilesEndpoint(source *v20230501s.ProfilesEndpoint) error {
+
+	// ObjectMeta
+	endpoint.ObjectMeta = *source.ObjectMeta.DeepCopy()
+
+	// Spec
+	var spec Profiles_Endpoint_Spec
+	err := spec.AssignProperties_From_Profiles_Endpoint_Spec(&source.Spec)
+	if err != nil {
+		return errors.Wrap(err, "calling AssignProperties_From_Profiles_Endpoint_Spec() to populate field Spec")
+	}
+	endpoint.Spec = spec
+
+	// Status
+	var status Profiles_Endpoint_STATUS
+	err = status.AssignProperties_From_Profiles_Endpoint_STATUS(&source.Status)
+	if err != nil {
+		return errors.Wrap(err, "calling AssignProperties_From_Profiles_Endpoint_STATUS() to populate field Status")
+	}
+	endpoint.Status = status
+
+	// Invoke the augmentConversionForProfilesEndpoint interface (if implemented) to customize the conversion
+	var endpointAsAny any = endpoint
+	if augmentedEndpoint, ok := endpointAsAny.(augmentConversionForProfilesEndpoint); ok {
+		err := augmentedEndpoint.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_ProfilesEndpoint populates the provided destination ProfilesEndpoint from our ProfilesEndpoint
+func (endpoint *ProfilesEndpoint) AssignProperties_To_ProfilesEndpoint(destination *v20230501s.ProfilesEndpoint) error {
+
+	// ObjectMeta
+	destination.ObjectMeta = *endpoint.ObjectMeta.DeepCopy()
+
+	// Spec
+	var spec v20230501s.Profiles_Endpoint_Spec
+	err := endpoint.Spec.AssignProperties_To_Profiles_Endpoint_Spec(&spec)
+	if err != nil {
+		return errors.Wrap(err, "calling AssignProperties_To_Profiles_Endpoint_Spec() to populate field Spec")
+	}
+	destination.Spec = spec
+
+	// Status
+	var status v20230501s.Profiles_Endpoint_STATUS
+	err = endpoint.Status.AssignProperties_To_Profiles_Endpoint_STATUS(&status)
+	if err != nil {
+		return errors.Wrap(err, "calling AssignProperties_To_Profiles_Endpoint_STATUS() to populate field Status")
+	}
+	destination.Status = status
+
+	// Invoke the augmentConversionForProfilesEndpoint interface (if implemented) to customize the conversion
+	var endpointAsAny any = endpoint
+	if augmentedEndpoint, ok := endpointAsAny.(augmentConversionForProfilesEndpoint); ok {
+		err := augmentedEndpoint.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
 
 // OriginalGVK returns a GroupValueKind for the original API version used to create the resource
 func (endpoint *ProfilesEndpoint) OriginalGVK() *schema.GroupVersionKind {
@@ -127,6 +215,11 @@ type ProfilesEndpointList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ProfilesEndpoint `json:"items"`
+}
+
+type augmentConversionForProfilesEndpoint interface {
+	AssignPropertiesFrom(src *v20230501s.ProfilesEndpoint) error
+	AssignPropertiesTo(dst *v20230501s.ProfilesEndpoint) error
 }
 
 // Storage version of v1api20210601.Profiles_Endpoint_Spec
@@ -166,20 +259,408 @@ var _ genruntime.ConvertibleSpec = &Profiles_Endpoint_Spec{}
 
 // ConvertSpecFrom populates our Profiles_Endpoint_Spec from the provided source
 func (endpoint *Profiles_Endpoint_Spec) ConvertSpecFrom(source genruntime.ConvertibleSpec) error {
-	if source == endpoint {
-		return errors.New("attempted conversion between unrelated implementations of github.com/Azure/azure-service-operator/v2/pkg/genruntime/ConvertibleSpec")
+	src, ok := source.(*v20230501s.Profiles_Endpoint_Spec)
+	if ok {
+		// Populate our instance from source
+		return endpoint.AssignProperties_From_Profiles_Endpoint_Spec(src)
 	}
 
-	return source.ConvertSpecTo(endpoint)
+	// Convert to an intermediate form
+	src = &v20230501s.Profiles_Endpoint_Spec{}
+	err := src.ConvertSpecFrom(source)
+	if err != nil {
+		return errors.Wrap(err, "initial step of conversion in ConvertSpecFrom()")
+	}
+
+	// Update our instance from src
+	err = endpoint.AssignProperties_From_Profiles_Endpoint_Spec(src)
+	if err != nil {
+		return errors.Wrap(err, "final step of conversion in ConvertSpecFrom()")
+	}
+
+	return nil
 }
 
 // ConvertSpecTo populates the provided destination from our Profiles_Endpoint_Spec
 func (endpoint *Profiles_Endpoint_Spec) ConvertSpecTo(destination genruntime.ConvertibleSpec) error {
-	if destination == endpoint {
-		return errors.New("attempted conversion between unrelated implementations of github.com/Azure/azure-service-operator/v2/pkg/genruntime/ConvertibleSpec")
+	dst, ok := destination.(*v20230501s.Profiles_Endpoint_Spec)
+	if ok {
+		// Populate destination from our instance
+		return endpoint.AssignProperties_To_Profiles_Endpoint_Spec(dst)
 	}
 
-	return destination.ConvertSpecFrom(endpoint)
+	// Convert to an intermediate form
+	dst = &v20230501s.Profiles_Endpoint_Spec{}
+	err := endpoint.AssignProperties_To_Profiles_Endpoint_Spec(dst)
+	if err != nil {
+		return errors.Wrap(err, "initial step of conversion in ConvertSpecTo()")
+	}
+
+	// Update dst from our instance
+	err = dst.ConvertSpecTo(destination)
+	if err != nil {
+		return errors.Wrap(err, "final step of conversion in ConvertSpecTo()")
+	}
+
+	return nil
+}
+
+// AssignProperties_From_Profiles_Endpoint_Spec populates our Profiles_Endpoint_Spec from the provided source Profiles_Endpoint_Spec
+func (endpoint *Profiles_Endpoint_Spec) AssignProperties_From_Profiles_Endpoint_Spec(source *v20230501s.Profiles_Endpoint_Spec) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// AzureName
+	endpoint.AzureName = source.AzureName
+
+	// ContentTypesToCompress
+	endpoint.ContentTypesToCompress = genruntime.CloneSliceOfString(source.ContentTypesToCompress)
+
+	// DefaultOriginGroup
+	if source.DefaultOriginGroup != nil {
+		var defaultOriginGroup ResourceReference
+		err := defaultOriginGroup.AssignProperties_From_ResourceReference(source.DefaultOriginGroup)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_ResourceReference() to populate field DefaultOriginGroup")
+		}
+		endpoint.DefaultOriginGroup = &defaultOriginGroup
+	} else {
+		endpoint.DefaultOriginGroup = nil
+	}
+
+	// DeliveryPolicy
+	if source.DeliveryPolicy != nil {
+		var deliveryPolicy EndpointProperties_DeliveryPolicy
+		err := deliveryPolicy.AssignProperties_From_EndpointProperties_DeliveryPolicy(source.DeliveryPolicy)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_EndpointProperties_DeliveryPolicy() to populate field DeliveryPolicy")
+		}
+		endpoint.DeliveryPolicy = &deliveryPolicy
+	} else {
+		endpoint.DeliveryPolicy = nil
+	}
+
+	// GeoFilters
+	if source.GeoFilters != nil {
+		geoFilterList := make([]GeoFilter, len(source.GeoFilters))
+		for geoFilterIndex, geoFilterItem := range source.GeoFilters {
+			// Shadow the loop variable to avoid aliasing
+			geoFilterItem := geoFilterItem
+			var geoFilter GeoFilter
+			err := geoFilter.AssignProperties_From_GeoFilter(&geoFilterItem)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_From_GeoFilter() to populate field GeoFilters")
+			}
+			geoFilterList[geoFilterIndex] = geoFilter
+		}
+		endpoint.GeoFilters = geoFilterList
+	} else {
+		endpoint.GeoFilters = nil
+	}
+
+	// IsCompressionEnabled
+	if source.IsCompressionEnabled != nil {
+		isCompressionEnabled := *source.IsCompressionEnabled
+		endpoint.IsCompressionEnabled = &isCompressionEnabled
+	} else {
+		endpoint.IsCompressionEnabled = nil
+	}
+
+	// IsHttpAllowed
+	if source.IsHttpAllowed != nil {
+		isHttpAllowed := *source.IsHttpAllowed
+		endpoint.IsHttpAllowed = &isHttpAllowed
+	} else {
+		endpoint.IsHttpAllowed = nil
+	}
+
+	// IsHttpsAllowed
+	if source.IsHttpsAllowed != nil {
+		isHttpsAllowed := *source.IsHttpsAllowed
+		endpoint.IsHttpsAllowed = &isHttpsAllowed
+	} else {
+		endpoint.IsHttpsAllowed = nil
+	}
+
+	// Location
+	endpoint.Location = genruntime.ClonePointerToString(source.Location)
+
+	// OptimizationType
+	endpoint.OptimizationType = genruntime.ClonePointerToString(source.OptimizationType)
+
+	// OriginGroups
+	if propertyBag.Contains("OriginGroups") {
+		var originGroup []DeepCreatedOriginGroup
+		err := propertyBag.Pull("OriginGroups", &originGroup)
+		if err != nil {
+			return errors.Wrap(err, "pulling 'OriginGroups' from propertyBag")
+		}
+
+		endpoint.OriginGroups = originGroup
+	} else {
+		endpoint.OriginGroups = nil
+	}
+
+	// OriginHostHeader
+	endpoint.OriginHostHeader = genruntime.ClonePointerToString(source.OriginHostHeader)
+
+	// OriginPath
+	endpoint.OriginPath = genruntime.ClonePointerToString(source.OriginPath)
+
+	// OriginalVersion
+	endpoint.OriginalVersion = source.OriginalVersion
+
+	// Origins
+	if propertyBag.Contains("Origins") {
+		var origin []DeepCreatedOrigin
+		err := propertyBag.Pull("Origins", &origin)
+		if err != nil {
+			return errors.Wrap(err, "pulling 'Origins' from propertyBag")
+		}
+
+		endpoint.Origins = origin
+	} else {
+		endpoint.Origins = nil
+	}
+
+	// Owner
+	if source.Owner != nil {
+		owner := source.Owner.Copy()
+		endpoint.Owner = &owner
+	} else {
+		endpoint.Owner = nil
+	}
+
+	// ProbePath
+	endpoint.ProbePath = genruntime.ClonePointerToString(source.ProbePath)
+
+	// QueryStringCachingBehavior
+	endpoint.QueryStringCachingBehavior = genruntime.ClonePointerToString(source.QueryStringCachingBehavior)
+
+	// Tags
+	endpoint.Tags = genruntime.CloneMapOfStringToString(source.Tags)
+
+	// UrlSigningKeys
+	if source.UrlSigningKeys != nil {
+		urlSigningKeyList := make([]UrlSigningKey, len(source.UrlSigningKeys))
+		for urlSigningKeyIndex, urlSigningKeyItem := range source.UrlSigningKeys {
+			// Shadow the loop variable to avoid aliasing
+			urlSigningKeyItem := urlSigningKeyItem
+			var urlSigningKey UrlSigningKey
+			err := urlSigningKey.AssignProperties_From_UrlSigningKey(&urlSigningKeyItem)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_From_UrlSigningKey() to populate field UrlSigningKeys")
+			}
+			urlSigningKeyList[urlSigningKeyIndex] = urlSigningKey
+		}
+		endpoint.UrlSigningKeys = urlSigningKeyList
+	} else {
+		endpoint.UrlSigningKeys = nil
+	}
+
+	// WebApplicationFirewallPolicyLink
+	if source.WebApplicationFirewallPolicyLink != nil {
+		var webApplicationFirewallPolicyLink EndpointProperties_WebApplicationFirewallPolicyLink
+		err := webApplicationFirewallPolicyLink.AssignProperties_From_EndpointProperties_WebApplicationFirewallPolicyLink(source.WebApplicationFirewallPolicyLink)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_EndpointProperties_WebApplicationFirewallPolicyLink() to populate field WebApplicationFirewallPolicyLink")
+		}
+		endpoint.WebApplicationFirewallPolicyLink = &webApplicationFirewallPolicyLink
+	} else {
+		endpoint.WebApplicationFirewallPolicyLink = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		endpoint.PropertyBag = propertyBag
+	} else {
+		endpoint.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForProfiles_Endpoint_Spec interface (if implemented) to customize the conversion
+	var endpointAsAny any = endpoint
+	if augmentedEndpoint, ok := endpointAsAny.(augmentConversionForProfiles_Endpoint_Spec); ok {
+		err := augmentedEndpoint.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_Profiles_Endpoint_Spec populates the provided destination Profiles_Endpoint_Spec from our Profiles_Endpoint_Spec
+func (endpoint *Profiles_Endpoint_Spec) AssignProperties_To_Profiles_Endpoint_Spec(destination *v20230501s.Profiles_Endpoint_Spec) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(endpoint.PropertyBag)
+
+	// AzureName
+	destination.AzureName = endpoint.AzureName
+
+	// ContentTypesToCompress
+	destination.ContentTypesToCompress = genruntime.CloneSliceOfString(endpoint.ContentTypesToCompress)
+
+	// DefaultOriginGroup
+	if endpoint.DefaultOriginGroup != nil {
+		var defaultOriginGroup v20230501s.ResourceReference
+		err := endpoint.DefaultOriginGroup.AssignProperties_To_ResourceReference(&defaultOriginGroup)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_ResourceReference() to populate field DefaultOriginGroup")
+		}
+		destination.DefaultOriginGroup = &defaultOriginGroup
+	} else {
+		destination.DefaultOriginGroup = nil
+	}
+
+	// DeliveryPolicy
+	if endpoint.DeliveryPolicy != nil {
+		var deliveryPolicy v20230501s.EndpointProperties_DeliveryPolicy
+		err := endpoint.DeliveryPolicy.AssignProperties_To_EndpointProperties_DeliveryPolicy(&deliveryPolicy)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_EndpointProperties_DeliveryPolicy() to populate field DeliveryPolicy")
+		}
+		destination.DeliveryPolicy = &deliveryPolicy
+	} else {
+		destination.DeliveryPolicy = nil
+	}
+
+	// GeoFilters
+	if endpoint.GeoFilters != nil {
+		geoFilterList := make([]v20230501s.GeoFilter, len(endpoint.GeoFilters))
+		for geoFilterIndex, geoFilterItem := range endpoint.GeoFilters {
+			// Shadow the loop variable to avoid aliasing
+			geoFilterItem := geoFilterItem
+			var geoFilter v20230501s.GeoFilter
+			err := geoFilterItem.AssignProperties_To_GeoFilter(&geoFilter)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_To_GeoFilter() to populate field GeoFilters")
+			}
+			geoFilterList[geoFilterIndex] = geoFilter
+		}
+		destination.GeoFilters = geoFilterList
+	} else {
+		destination.GeoFilters = nil
+	}
+
+	// IsCompressionEnabled
+	if endpoint.IsCompressionEnabled != nil {
+		isCompressionEnabled := *endpoint.IsCompressionEnabled
+		destination.IsCompressionEnabled = &isCompressionEnabled
+	} else {
+		destination.IsCompressionEnabled = nil
+	}
+
+	// IsHttpAllowed
+	if endpoint.IsHttpAllowed != nil {
+		isHttpAllowed := *endpoint.IsHttpAllowed
+		destination.IsHttpAllowed = &isHttpAllowed
+	} else {
+		destination.IsHttpAllowed = nil
+	}
+
+	// IsHttpsAllowed
+	if endpoint.IsHttpsAllowed != nil {
+		isHttpsAllowed := *endpoint.IsHttpsAllowed
+		destination.IsHttpsAllowed = &isHttpsAllowed
+	} else {
+		destination.IsHttpsAllowed = nil
+	}
+
+	// Location
+	destination.Location = genruntime.ClonePointerToString(endpoint.Location)
+
+	// OptimizationType
+	destination.OptimizationType = genruntime.ClonePointerToString(endpoint.OptimizationType)
+
+	// OriginGroups
+	if len(endpoint.OriginGroups) > 0 {
+		propertyBag.Add("OriginGroups", endpoint.OriginGroups)
+	} else {
+		propertyBag.Remove("OriginGroups")
+	}
+
+	// OriginHostHeader
+	destination.OriginHostHeader = genruntime.ClonePointerToString(endpoint.OriginHostHeader)
+
+	// OriginPath
+	destination.OriginPath = genruntime.ClonePointerToString(endpoint.OriginPath)
+
+	// OriginalVersion
+	destination.OriginalVersion = endpoint.OriginalVersion
+
+	// Origins
+	if len(endpoint.Origins) > 0 {
+		propertyBag.Add("Origins", endpoint.Origins)
+	} else {
+		propertyBag.Remove("Origins")
+	}
+
+	// Owner
+	if endpoint.Owner != nil {
+		owner := endpoint.Owner.Copy()
+		destination.Owner = &owner
+	} else {
+		destination.Owner = nil
+	}
+
+	// ProbePath
+	destination.ProbePath = genruntime.ClonePointerToString(endpoint.ProbePath)
+
+	// QueryStringCachingBehavior
+	destination.QueryStringCachingBehavior = genruntime.ClonePointerToString(endpoint.QueryStringCachingBehavior)
+
+	// Tags
+	destination.Tags = genruntime.CloneMapOfStringToString(endpoint.Tags)
+
+	// UrlSigningKeys
+	if endpoint.UrlSigningKeys != nil {
+		urlSigningKeyList := make([]v20230501s.UrlSigningKey, len(endpoint.UrlSigningKeys))
+		for urlSigningKeyIndex, urlSigningKeyItem := range endpoint.UrlSigningKeys {
+			// Shadow the loop variable to avoid aliasing
+			urlSigningKeyItem := urlSigningKeyItem
+			var urlSigningKey v20230501s.UrlSigningKey
+			err := urlSigningKeyItem.AssignProperties_To_UrlSigningKey(&urlSigningKey)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_To_UrlSigningKey() to populate field UrlSigningKeys")
+			}
+			urlSigningKeyList[urlSigningKeyIndex] = urlSigningKey
+		}
+		destination.UrlSigningKeys = urlSigningKeyList
+	} else {
+		destination.UrlSigningKeys = nil
+	}
+
+	// WebApplicationFirewallPolicyLink
+	if endpoint.WebApplicationFirewallPolicyLink != nil {
+		var webApplicationFirewallPolicyLink v20230501s.EndpointProperties_WebApplicationFirewallPolicyLink
+		err := endpoint.WebApplicationFirewallPolicyLink.AssignProperties_To_EndpointProperties_WebApplicationFirewallPolicyLink(&webApplicationFirewallPolicyLink)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_EndpointProperties_WebApplicationFirewallPolicyLink() to populate field WebApplicationFirewallPolicyLink")
+		}
+		destination.WebApplicationFirewallPolicyLink = &webApplicationFirewallPolicyLink
+	} else {
+		destination.WebApplicationFirewallPolicyLink = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForProfiles_Endpoint_Spec interface (if implemented) to customize the conversion
+	var endpointAsAny any = endpoint
+	if augmentedEndpoint, ok := endpointAsAny.(augmentConversionForProfiles_Endpoint_Spec); ok {
+		err := augmentedEndpoint.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.Profiles_Endpoint_STATUS
@@ -218,20 +699,492 @@ var _ genruntime.ConvertibleStatus = &Profiles_Endpoint_STATUS{}
 
 // ConvertStatusFrom populates our Profiles_Endpoint_STATUS from the provided source
 func (endpoint *Profiles_Endpoint_STATUS) ConvertStatusFrom(source genruntime.ConvertibleStatus) error {
-	if source == endpoint {
-		return errors.New("attempted conversion between unrelated implementations of github.com/Azure/azure-service-operator/v2/pkg/genruntime/ConvertibleStatus")
+	src, ok := source.(*v20230501s.Profiles_Endpoint_STATUS)
+	if ok {
+		// Populate our instance from source
+		return endpoint.AssignProperties_From_Profiles_Endpoint_STATUS(src)
 	}
 
-	return source.ConvertStatusTo(endpoint)
+	// Convert to an intermediate form
+	src = &v20230501s.Profiles_Endpoint_STATUS{}
+	err := src.ConvertStatusFrom(source)
+	if err != nil {
+		return errors.Wrap(err, "initial step of conversion in ConvertStatusFrom()")
+	}
+
+	// Update our instance from src
+	err = endpoint.AssignProperties_From_Profiles_Endpoint_STATUS(src)
+	if err != nil {
+		return errors.Wrap(err, "final step of conversion in ConvertStatusFrom()")
+	}
+
+	return nil
 }
 
 // ConvertStatusTo populates the provided destination from our Profiles_Endpoint_STATUS
 func (endpoint *Profiles_Endpoint_STATUS) ConvertStatusTo(destination genruntime.ConvertibleStatus) error {
-	if destination == endpoint {
-		return errors.New("attempted conversion between unrelated implementations of github.com/Azure/azure-service-operator/v2/pkg/genruntime/ConvertibleStatus")
+	dst, ok := destination.(*v20230501s.Profiles_Endpoint_STATUS)
+	if ok {
+		// Populate destination from our instance
+		return endpoint.AssignProperties_To_Profiles_Endpoint_STATUS(dst)
 	}
 
-	return destination.ConvertStatusFrom(endpoint)
+	// Convert to an intermediate form
+	dst = &v20230501s.Profiles_Endpoint_STATUS{}
+	err := endpoint.AssignProperties_To_Profiles_Endpoint_STATUS(dst)
+	if err != nil {
+		return errors.Wrap(err, "initial step of conversion in ConvertStatusTo()")
+	}
+
+	// Update dst from our instance
+	err = dst.ConvertStatusTo(destination)
+	if err != nil {
+		return errors.Wrap(err, "final step of conversion in ConvertStatusTo()")
+	}
+
+	return nil
+}
+
+// AssignProperties_From_Profiles_Endpoint_STATUS populates our Profiles_Endpoint_STATUS from the provided source Profiles_Endpoint_STATUS
+func (endpoint *Profiles_Endpoint_STATUS) AssignProperties_From_Profiles_Endpoint_STATUS(source *v20230501s.Profiles_Endpoint_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Conditions
+	endpoint.Conditions = genruntime.CloneSliceOfCondition(source.Conditions)
+
+	// ContentTypesToCompress
+	endpoint.ContentTypesToCompress = genruntime.CloneSliceOfString(source.ContentTypesToCompress)
+
+	// CustomDomains
+	if source.CustomDomains != nil {
+		customDomainList := make([]DeepCreatedCustomDomain_STATUS, len(source.CustomDomains))
+		for customDomainIndex, customDomainItem := range source.CustomDomains {
+			// Shadow the loop variable to avoid aliasing
+			customDomainItem := customDomainItem
+			var customDomain DeepCreatedCustomDomain_STATUS
+			err := customDomain.AssignProperties_From_DeepCreatedCustomDomain_STATUS(&customDomainItem)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_From_DeepCreatedCustomDomain_STATUS() to populate field CustomDomains")
+			}
+			customDomainList[customDomainIndex] = customDomain
+		}
+		endpoint.CustomDomains = customDomainList
+	} else {
+		endpoint.CustomDomains = nil
+	}
+
+	// DefaultOriginGroup
+	if source.DefaultOriginGroup != nil {
+		var defaultOriginGroup ResourceReference_STATUS
+		err := defaultOriginGroup.AssignProperties_From_ResourceReference_STATUS(source.DefaultOriginGroup)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_ResourceReference_STATUS() to populate field DefaultOriginGroup")
+		}
+		endpoint.DefaultOriginGroup = &defaultOriginGroup
+	} else {
+		endpoint.DefaultOriginGroup = nil
+	}
+
+	// DeliveryPolicy
+	if source.DeliveryPolicy != nil {
+		var deliveryPolicy EndpointProperties_DeliveryPolicy_STATUS
+		err := deliveryPolicy.AssignProperties_From_EndpointProperties_DeliveryPolicy_STATUS(source.DeliveryPolicy)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_EndpointProperties_DeliveryPolicy_STATUS() to populate field DeliveryPolicy")
+		}
+		endpoint.DeliveryPolicy = &deliveryPolicy
+	} else {
+		endpoint.DeliveryPolicy = nil
+	}
+
+	// GeoFilters
+	if source.GeoFilters != nil {
+		geoFilterList := make([]GeoFilter_STATUS, len(source.GeoFilters))
+		for geoFilterIndex, geoFilterItem := range source.GeoFilters {
+			// Shadow the loop variable to avoid aliasing
+			geoFilterItem := geoFilterItem
+			var geoFilter GeoFilter_STATUS
+			err := geoFilter.AssignProperties_From_GeoFilter_STATUS(&geoFilterItem)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_From_GeoFilter_STATUS() to populate field GeoFilters")
+			}
+			geoFilterList[geoFilterIndex] = geoFilter
+		}
+		endpoint.GeoFilters = geoFilterList
+	} else {
+		endpoint.GeoFilters = nil
+	}
+
+	// HostName
+	endpoint.HostName = genruntime.ClonePointerToString(source.HostName)
+
+	// Id
+	endpoint.Id = genruntime.ClonePointerToString(source.Id)
+
+	// IsCompressionEnabled
+	if source.IsCompressionEnabled != nil {
+		isCompressionEnabled := *source.IsCompressionEnabled
+		endpoint.IsCompressionEnabled = &isCompressionEnabled
+	} else {
+		endpoint.IsCompressionEnabled = nil
+	}
+
+	// IsHttpAllowed
+	if source.IsHttpAllowed != nil {
+		isHttpAllowed := *source.IsHttpAllowed
+		endpoint.IsHttpAllowed = &isHttpAllowed
+	} else {
+		endpoint.IsHttpAllowed = nil
+	}
+
+	// IsHttpsAllowed
+	if source.IsHttpsAllowed != nil {
+		isHttpsAllowed := *source.IsHttpsAllowed
+		endpoint.IsHttpsAllowed = &isHttpsAllowed
+	} else {
+		endpoint.IsHttpsAllowed = nil
+	}
+
+	// Location
+	endpoint.Location = genruntime.ClonePointerToString(source.Location)
+
+	// Name
+	endpoint.Name = genruntime.ClonePointerToString(source.Name)
+
+	// OptimizationType
+	endpoint.OptimizationType = genruntime.ClonePointerToString(source.OptimizationType)
+
+	// OriginGroups
+	if propertyBag.Contains("OriginGroups") {
+		var originGroup []DeepCreatedOriginGroup_STATUS
+		err := propertyBag.Pull("OriginGroups", &originGroup)
+		if err != nil {
+			return errors.Wrap(err, "pulling 'OriginGroups' from propertyBag")
+		}
+
+		endpoint.OriginGroups = originGroup
+	} else {
+		endpoint.OriginGroups = nil
+	}
+
+	// OriginHostHeader
+	endpoint.OriginHostHeader = genruntime.ClonePointerToString(source.OriginHostHeader)
+
+	// OriginPath
+	endpoint.OriginPath = genruntime.ClonePointerToString(source.OriginPath)
+
+	// Origins
+	if propertyBag.Contains("Origins") {
+		var origin []DeepCreatedOrigin_STATUS
+		err := propertyBag.Pull("Origins", &origin)
+		if err != nil {
+			return errors.Wrap(err, "pulling 'Origins' from propertyBag")
+		}
+
+		endpoint.Origins = origin
+	} else {
+		endpoint.Origins = nil
+	}
+
+	// ProbePath
+	endpoint.ProbePath = genruntime.ClonePointerToString(source.ProbePath)
+
+	// ProvisioningState
+	endpoint.ProvisioningState = genruntime.ClonePointerToString(source.ProvisioningState)
+
+	// QueryStringCachingBehavior
+	endpoint.QueryStringCachingBehavior = genruntime.ClonePointerToString(source.QueryStringCachingBehavior)
+
+	// ResourceState
+	endpoint.ResourceState = genruntime.ClonePointerToString(source.ResourceState)
+
+	// SystemData
+	if source.SystemData != nil {
+		var systemDatum SystemData_STATUS
+		err := systemDatum.AssignProperties_From_SystemData_STATUS(source.SystemData)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_SystemData_STATUS() to populate field SystemData")
+		}
+		endpoint.SystemData = &systemDatum
+	} else {
+		endpoint.SystemData = nil
+	}
+
+	// Tags
+	endpoint.Tags = genruntime.CloneMapOfStringToString(source.Tags)
+
+	// Type
+	endpoint.Type = genruntime.ClonePointerToString(source.Type)
+
+	// UrlSigningKeys
+	if source.UrlSigningKeys != nil {
+		urlSigningKeyList := make([]UrlSigningKey_STATUS, len(source.UrlSigningKeys))
+		for urlSigningKeyIndex, urlSigningKeyItem := range source.UrlSigningKeys {
+			// Shadow the loop variable to avoid aliasing
+			urlSigningKeyItem := urlSigningKeyItem
+			var urlSigningKey UrlSigningKey_STATUS
+			err := urlSigningKey.AssignProperties_From_UrlSigningKey_STATUS(&urlSigningKeyItem)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_From_UrlSigningKey_STATUS() to populate field UrlSigningKeys")
+			}
+			urlSigningKeyList[urlSigningKeyIndex] = urlSigningKey
+		}
+		endpoint.UrlSigningKeys = urlSigningKeyList
+	} else {
+		endpoint.UrlSigningKeys = nil
+	}
+
+	// WebApplicationFirewallPolicyLink
+	if source.WebApplicationFirewallPolicyLink != nil {
+		var webApplicationFirewallPolicyLink EndpointProperties_WebApplicationFirewallPolicyLink_STATUS
+		err := webApplicationFirewallPolicyLink.AssignProperties_From_EndpointProperties_WebApplicationFirewallPolicyLink_STATUS(source.WebApplicationFirewallPolicyLink)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_EndpointProperties_WebApplicationFirewallPolicyLink_STATUS() to populate field WebApplicationFirewallPolicyLink")
+		}
+		endpoint.WebApplicationFirewallPolicyLink = &webApplicationFirewallPolicyLink
+	} else {
+		endpoint.WebApplicationFirewallPolicyLink = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		endpoint.PropertyBag = propertyBag
+	} else {
+		endpoint.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForProfiles_Endpoint_STATUS interface (if implemented) to customize the conversion
+	var endpointAsAny any = endpoint
+	if augmentedEndpoint, ok := endpointAsAny.(augmentConversionForProfiles_Endpoint_STATUS); ok {
+		err := augmentedEndpoint.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_Profiles_Endpoint_STATUS populates the provided destination Profiles_Endpoint_STATUS from our Profiles_Endpoint_STATUS
+func (endpoint *Profiles_Endpoint_STATUS) AssignProperties_To_Profiles_Endpoint_STATUS(destination *v20230501s.Profiles_Endpoint_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(endpoint.PropertyBag)
+
+	// Conditions
+	destination.Conditions = genruntime.CloneSliceOfCondition(endpoint.Conditions)
+
+	// ContentTypesToCompress
+	destination.ContentTypesToCompress = genruntime.CloneSliceOfString(endpoint.ContentTypesToCompress)
+
+	// CustomDomains
+	if endpoint.CustomDomains != nil {
+		customDomainList := make([]v20230501s.DeepCreatedCustomDomain_STATUS, len(endpoint.CustomDomains))
+		for customDomainIndex, customDomainItem := range endpoint.CustomDomains {
+			// Shadow the loop variable to avoid aliasing
+			customDomainItem := customDomainItem
+			var customDomain v20230501s.DeepCreatedCustomDomain_STATUS
+			err := customDomainItem.AssignProperties_To_DeepCreatedCustomDomain_STATUS(&customDomain)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_To_DeepCreatedCustomDomain_STATUS() to populate field CustomDomains")
+			}
+			customDomainList[customDomainIndex] = customDomain
+		}
+		destination.CustomDomains = customDomainList
+	} else {
+		destination.CustomDomains = nil
+	}
+
+	// DefaultOriginGroup
+	if endpoint.DefaultOriginGroup != nil {
+		var defaultOriginGroup v20230501s.ResourceReference_STATUS
+		err := endpoint.DefaultOriginGroup.AssignProperties_To_ResourceReference_STATUS(&defaultOriginGroup)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_ResourceReference_STATUS() to populate field DefaultOriginGroup")
+		}
+		destination.DefaultOriginGroup = &defaultOriginGroup
+	} else {
+		destination.DefaultOriginGroup = nil
+	}
+
+	// DeliveryPolicy
+	if endpoint.DeliveryPolicy != nil {
+		var deliveryPolicy v20230501s.EndpointProperties_DeliveryPolicy_STATUS
+		err := endpoint.DeliveryPolicy.AssignProperties_To_EndpointProperties_DeliveryPolicy_STATUS(&deliveryPolicy)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_EndpointProperties_DeliveryPolicy_STATUS() to populate field DeliveryPolicy")
+		}
+		destination.DeliveryPolicy = &deliveryPolicy
+	} else {
+		destination.DeliveryPolicy = nil
+	}
+
+	// GeoFilters
+	if endpoint.GeoFilters != nil {
+		geoFilterList := make([]v20230501s.GeoFilter_STATUS, len(endpoint.GeoFilters))
+		for geoFilterIndex, geoFilterItem := range endpoint.GeoFilters {
+			// Shadow the loop variable to avoid aliasing
+			geoFilterItem := geoFilterItem
+			var geoFilter v20230501s.GeoFilter_STATUS
+			err := geoFilterItem.AssignProperties_To_GeoFilter_STATUS(&geoFilter)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_To_GeoFilter_STATUS() to populate field GeoFilters")
+			}
+			geoFilterList[geoFilterIndex] = geoFilter
+		}
+		destination.GeoFilters = geoFilterList
+	} else {
+		destination.GeoFilters = nil
+	}
+
+	// HostName
+	destination.HostName = genruntime.ClonePointerToString(endpoint.HostName)
+
+	// Id
+	destination.Id = genruntime.ClonePointerToString(endpoint.Id)
+
+	// IsCompressionEnabled
+	if endpoint.IsCompressionEnabled != nil {
+		isCompressionEnabled := *endpoint.IsCompressionEnabled
+		destination.IsCompressionEnabled = &isCompressionEnabled
+	} else {
+		destination.IsCompressionEnabled = nil
+	}
+
+	// IsHttpAllowed
+	if endpoint.IsHttpAllowed != nil {
+		isHttpAllowed := *endpoint.IsHttpAllowed
+		destination.IsHttpAllowed = &isHttpAllowed
+	} else {
+		destination.IsHttpAllowed = nil
+	}
+
+	// IsHttpsAllowed
+	if endpoint.IsHttpsAllowed != nil {
+		isHttpsAllowed := *endpoint.IsHttpsAllowed
+		destination.IsHttpsAllowed = &isHttpsAllowed
+	} else {
+		destination.IsHttpsAllowed = nil
+	}
+
+	// Location
+	destination.Location = genruntime.ClonePointerToString(endpoint.Location)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(endpoint.Name)
+
+	// OptimizationType
+	destination.OptimizationType = genruntime.ClonePointerToString(endpoint.OptimizationType)
+
+	// OriginGroups
+	if len(endpoint.OriginGroups) > 0 {
+		propertyBag.Add("OriginGroups", endpoint.OriginGroups)
+	} else {
+		propertyBag.Remove("OriginGroups")
+	}
+
+	// OriginHostHeader
+	destination.OriginHostHeader = genruntime.ClonePointerToString(endpoint.OriginHostHeader)
+
+	// OriginPath
+	destination.OriginPath = genruntime.ClonePointerToString(endpoint.OriginPath)
+
+	// Origins
+	if len(endpoint.Origins) > 0 {
+		propertyBag.Add("Origins", endpoint.Origins)
+	} else {
+		propertyBag.Remove("Origins")
+	}
+
+	// ProbePath
+	destination.ProbePath = genruntime.ClonePointerToString(endpoint.ProbePath)
+
+	// ProvisioningState
+	destination.ProvisioningState = genruntime.ClonePointerToString(endpoint.ProvisioningState)
+
+	// QueryStringCachingBehavior
+	destination.QueryStringCachingBehavior = genruntime.ClonePointerToString(endpoint.QueryStringCachingBehavior)
+
+	// ResourceState
+	destination.ResourceState = genruntime.ClonePointerToString(endpoint.ResourceState)
+
+	// SystemData
+	if endpoint.SystemData != nil {
+		var systemDatum v20230501s.SystemData_STATUS
+		err := endpoint.SystemData.AssignProperties_To_SystemData_STATUS(&systemDatum)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_SystemData_STATUS() to populate field SystemData")
+		}
+		destination.SystemData = &systemDatum
+	} else {
+		destination.SystemData = nil
+	}
+
+	// Tags
+	destination.Tags = genruntime.CloneMapOfStringToString(endpoint.Tags)
+
+	// Type
+	destination.Type = genruntime.ClonePointerToString(endpoint.Type)
+
+	// UrlSigningKeys
+	if endpoint.UrlSigningKeys != nil {
+		urlSigningKeyList := make([]v20230501s.UrlSigningKey_STATUS, len(endpoint.UrlSigningKeys))
+		for urlSigningKeyIndex, urlSigningKeyItem := range endpoint.UrlSigningKeys {
+			// Shadow the loop variable to avoid aliasing
+			urlSigningKeyItem := urlSigningKeyItem
+			var urlSigningKey v20230501s.UrlSigningKey_STATUS
+			err := urlSigningKeyItem.AssignProperties_To_UrlSigningKey_STATUS(&urlSigningKey)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_To_UrlSigningKey_STATUS() to populate field UrlSigningKeys")
+			}
+			urlSigningKeyList[urlSigningKeyIndex] = urlSigningKey
+		}
+		destination.UrlSigningKeys = urlSigningKeyList
+	} else {
+		destination.UrlSigningKeys = nil
+	}
+
+	// WebApplicationFirewallPolicyLink
+	if endpoint.WebApplicationFirewallPolicyLink != nil {
+		var webApplicationFirewallPolicyLink v20230501s.EndpointProperties_WebApplicationFirewallPolicyLink_STATUS
+		err := endpoint.WebApplicationFirewallPolicyLink.AssignProperties_To_EndpointProperties_WebApplicationFirewallPolicyLink_STATUS(&webApplicationFirewallPolicyLink)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_EndpointProperties_WebApplicationFirewallPolicyLink_STATUS() to populate field WebApplicationFirewallPolicyLink")
+		}
+		destination.WebApplicationFirewallPolicyLink = &webApplicationFirewallPolicyLink
+	} else {
+		destination.WebApplicationFirewallPolicyLink = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForProfiles_Endpoint_STATUS interface (if implemented) to customize the conversion
+	var endpointAsAny any = endpoint
+	if augmentedEndpoint, ok := endpointAsAny.(augmentConversionForProfiles_Endpoint_STATUS); ok {
+		err := augmentedEndpoint.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+type augmentConversionForProfiles_Endpoint_Spec interface {
+	AssignPropertiesFrom(src *v20230501s.Profiles_Endpoint_Spec) error
+	AssignPropertiesTo(dst *v20230501s.Profiles_Endpoint_Spec) error
+}
+
+type augmentConversionForProfiles_Endpoint_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.Profiles_Endpoint_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.Profiles_Endpoint_STATUS) error
 }
 
 // Storage version of v1api20210601.DeepCreatedCustomDomain_STATUS
@@ -241,6 +1194,74 @@ type DeepCreatedCustomDomain_STATUS struct {
 	Name           *string                `json:"name,omitempty"`
 	PropertyBag    genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	ValidationData *string                `json:"validationData,omitempty"`
+}
+
+// AssignProperties_From_DeepCreatedCustomDomain_STATUS populates our DeepCreatedCustomDomain_STATUS from the provided source DeepCreatedCustomDomain_STATUS
+func (domain *DeepCreatedCustomDomain_STATUS) AssignProperties_From_DeepCreatedCustomDomain_STATUS(source *v20230501s.DeepCreatedCustomDomain_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// HostName
+	domain.HostName = genruntime.ClonePointerToString(source.HostName)
+
+	// Name
+	domain.Name = genruntime.ClonePointerToString(source.Name)
+
+	// ValidationData
+	domain.ValidationData = genruntime.ClonePointerToString(source.ValidationData)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		domain.PropertyBag = propertyBag
+	} else {
+		domain.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeepCreatedCustomDomain_STATUS interface (if implemented) to customize the conversion
+	var domainAsAny any = domain
+	if augmentedDomain, ok := domainAsAny.(augmentConversionForDeepCreatedCustomDomain_STATUS); ok {
+		err := augmentedDomain.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeepCreatedCustomDomain_STATUS populates the provided destination DeepCreatedCustomDomain_STATUS from our DeepCreatedCustomDomain_STATUS
+func (domain *DeepCreatedCustomDomain_STATUS) AssignProperties_To_DeepCreatedCustomDomain_STATUS(destination *v20230501s.DeepCreatedCustomDomain_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(domain.PropertyBag)
+
+	// HostName
+	destination.HostName = genruntime.ClonePointerToString(domain.HostName)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(domain.Name)
+
+	// ValidationData
+	destination.ValidationData = genruntime.ClonePointerToString(domain.ValidationData)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeepCreatedCustomDomain_STATUS interface (if implemented) to customize the conversion
+	var domainAsAny any = domain
+	if augmentedDomain, ok := domainAsAny.(augmentConversionForDeepCreatedCustomDomain_STATUS); ok {
+		err := augmentedDomain.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeepCreatedOrigin
@@ -317,11 +1338,195 @@ type EndpointProperties_DeliveryPolicy struct {
 	Rules       []DeliveryRule         `json:"rules,omitempty"`
 }
 
+// AssignProperties_From_EndpointProperties_DeliveryPolicy populates our EndpointProperties_DeliveryPolicy from the provided source EndpointProperties_DeliveryPolicy
+func (policy *EndpointProperties_DeliveryPolicy) AssignProperties_From_EndpointProperties_DeliveryPolicy(source *v20230501s.EndpointProperties_DeliveryPolicy) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Description
+	policy.Description = genruntime.ClonePointerToString(source.Description)
+
+	// Rules
+	if source.Rules != nil {
+		ruleList := make([]DeliveryRule, len(source.Rules))
+		for ruleIndex, ruleItem := range source.Rules {
+			// Shadow the loop variable to avoid aliasing
+			ruleItem := ruleItem
+			var rule DeliveryRule
+			err := rule.AssignProperties_From_DeliveryRule(&ruleItem)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_From_DeliveryRule() to populate field Rules")
+			}
+			ruleList[ruleIndex] = rule
+		}
+		policy.Rules = ruleList
+	} else {
+		policy.Rules = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		policy.PropertyBag = propertyBag
+	} else {
+		policy.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForEndpointProperties_DeliveryPolicy interface (if implemented) to customize the conversion
+	var policyAsAny any = policy
+	if augmentedPolicy, ok := policyAsAny.(augmentConversionForEndpointProperties_DeliveryPolicy); ok {
+		err := augmentedPolicy.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_EndpointProperties_DeliveryPolicy populates the provided destination EndpointProperties_DeliveryPolicy from our EndpointProperties_DeliveryPolicy
+func (policy *EndpointProperties_DeliveryPolicy) AssignProperties_To_EndpointProperties_DeliveryPolicy(destination *v20230501s.EndpointProperties_DeliveryPolicy) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(policy.PropertyBag)
+
+	// Description
+	destination.Description = genruntime.ClonePointerToString(policy.Description)
+
+	// Rules
+	if policy.Rules != nil {
+		ruleList := make([]v20230501s.DeliveryRule, len(policy.Rules))
+		for ruleIndex, ruleItem := range policy.Rules {
+			// Shadow the loop variable to avoid aliasing
+			ruleItem := ruleItem
+			var rule v20230501s.DeliveryRule
+			err := ruleItem.AssignProperties_To_DeliveryRule(&rule)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_To_DeliveryRule() to populate field Rules")
+			}
+			ruleList[ruleIndex] = rule
+		}
+		destination.Rules = ruleList
+	} else {
+		destination.Rules = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForEndpointProperties_DeliveryPolicy interface (if implemented) to customize the conversion
+	var policyAsAny any = policy
+	if augmentedPolicy, ok := policyAsAny.(augmentConversionForEndpointProperties_DeliveryPolicy); ok {
+		err := augmentedPolicy.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.EndpointProperties_DeliveryPolicy_STATUS
 type EndpointProperties_DeliveryPolicy_STATUS struct {
 	Description *string                `json:"description,omitempty"`
 	PropertyBag genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	Rules       []DeliveryRule_STATUS  `json:"rules,omitempty"`
+}
+
+// AssignProperties_From_EndpointProperties_DeliveryPolicy_STATUS populates our EndpointProperties_DeliveryPolicy_STATUS from the provided source EndpointProperties_DeliveryPolicy_STATUS
+func (policy *EndpointProperties_DeliveryPolicy_STATUS) AssignProperties_From_EndpointProperties_DeliveryPolicy_STATUS(source *v20230501s.EndpointProperties_DeliveryPolicy_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Description
+	policy.Description = genruntime.ClonePointerToString(source.Description)
+
+	// Rules
+	if source.Rules != nil {
+		ruleList := make([]DeliveryRule_STATUS, len(source.Rules))
+		for ruleIndex, ruleItem := range source.Rules {
+			// Shadow the loop variable to avoid aliasing
+			ruleItem := ruleItem
+			var rule DeliveryRule_STATUS
+			err := rule.AssignProperties_From_DeliveryRule_STATUS(&ruleItem)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_From_DeliveryRule_STATUS() to populate field Rules")
+			}
+			ruleList[ruleIndex] = rule
+		}
+		policy.Rules = ruleList
+	} else {
+		policy.Rules = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		policy.PropertyBag = propertyBag
+	} else {
+		policy.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForEndpointProperties_DeliveryPolicy_STATUS interface (if implemented) to customize the conversion
+	var policyAsAny any = policy
+	if augmentedPolicy, ok := policyAsAny.(augmentConversionForEndpointProperties_DeliveryPolicy_STATUS); ok {
+		err := augmentedPolicy.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_EndpointProperties_DeliveryPolicy_STATUS populates the provided destination EndpointProperties_DeliveryPolicy_STATUS from our EndpointProperties_DeliveryPolicy_STATUS
+func (policy *EndpointProperties_DeliveryPolicy_STATUS) AssignProperties_To_EndpointProperties_DeliveryPolicy_STATUS(destination *v20230501s.EndpointProperties_DeliveryPolicy_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(policy.PropertyBag)
+
+	// Description
+	destination.Description = genruntime.ClonePointerToString(policy.Description)
+
+	// Rules
+	if policy.Rules != nil {
+		ruleList := make([]v20230501s.DeliveryRule_STATUS, len(policy.Rules))
+		for ruleIndex, ruleItem := range policy.Rules {
+			// Shadow the loop variable to avoid aliasing
+			ruleItem := ruleItem
+			var rule v20230501s.DeliveryRule_STATUS
+			err := ruleItem.AssignProperties_To_DeliveryRule_STATUS(&rule)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_To_DeliveryRule_STATUS() to populate field Rules")
+			}
+			ruleList[ruleIndex] = rule
+		}
+		destination.Rules = ruleList
+	} else {
+		destination.Rules = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForEndpointProperties_DeliveryPolicy_STATUS interface (if implemented) to customize the conversion
+	var policyAsAny any = policy
+	if augmentedPolicy, ok := policyAsAny.(augmentConversionForEndpointProperties_DeliveryPolicy_STATUS); ok {
+		err := augmentedPolicy.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.EndpointProperties_WebApplicationFirewallPolicyLink
@@ -332,10 +1537,132 @@ type EndpointProperties_WebApplicationFirewallPolicyLink struct {
 	Reference *genruntime.ResourceReference `armReference:"Id" json:"reference,omitempty"`
 }
 
+// AssignProperties_From_EndpointProperties_WebApplicationFirewallPolicyLink populates our EndpointProperties_WebApplicationFirewallPolicyLink from the provided source EndpointProperties_WebApplicationFirewallPolicyLink
+func (link *EndpointProperties_WebApplicationFirewallPolicyLink) AssignProperties_From_EndpointProperties_WebApplicationFirewallPolicyLink(source *v20230501s.EndpointProperties_WebApplicationFirewallPolicyLink) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Reference
+	if source.Reference != nil {
+		reference := source.Reference.Copy()
+		link.Reference = &reference
+	} else {
+		link.Reference = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		link.PropertyBag = propertyBag
+	} else {
+		link.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForEndpointProperties_WebApplicationFirewallPolicyLink interface (if implemented) to customize the conversion
+	var linkAsAny any = link
+	if augmentedLink, ok := linkAsAny.(augmentConversionForEndpointProperties_WebApplicationFirewallPolicyLink); ok {
+		err := augmentedLink.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_EndpointProperties_WebApplicationFirewallPolicyLink populates the provided destination EndpointProperties_WebApplicationFirewallPolicyLink from our EndpointProperties_WebApplicationFirewallPolicyLink
+func (link *EndpointProperties_WebApplicationFirewallPolicyLink) AssignProperties_To_EndpointProperties_WebApplicationFirewallPolicyLink(destination *v20230501s.EndpointProperties_WebApplicationFirewallPolicyLink) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(link.PropertyBag)
+
+	// Reference
+	if link.Reference != nil {
+		reference := link.Reference.Copy()
+		destination.Reference = &reference
+	} else {
+		destination.Reference = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForEndpointProperties_WebApplicationFirewallPolicyLink interface (if implemented) to customize the conversion
+	var linkAsAny any = link
+	if augmentedLink, ok := linkAsAny.(augmentConversionForEndpointProperties_WebApplicationFirewallPolicyLink); ok {
+		err := augmentedLink.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.EndpointProperties_WebApplicationFirewallPolicyLink_STATUS
 type EndpointProperties_WebApplicationFirewallPolicyLink_STATUS struct {
 	Id          *string                `json:"id,omitempty"`
 	PropertyBag genruntime.PropertyBag `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_EndpointProperties_WebApplicationFirewallPolicyLink_STATUS populates our EndpointProperties_WebApplicationFirewallPolicyLink_STATUS from the provided source EndpointProperties_WebApplicationFirewallPolicyLink_STATUS
+func (link *EndpointProperties_WebApplicationFirewallPolicyLink_STATUS) AssignProperties_From_EndpointProperties_WebApplicationFirewallPolicyLink_STATUS(source *v20230501s.EndpointProperties_WebApplicationFirewallPolicyLink_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Id
+	link.Id = genruntime.ClonePointerToString(source.Id)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		link.PropertyBag = propertyBag
+	} else {
+		link.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForEndpointProperties_WebApplicationFirewallPolicyLink_STATUS interface (if implemented) to customize the conversion
+	var linkAsAny any = link
+	if augmentedLink, ok := linkAsAny.(augmentConversionForEndpointProperties_WebApplicationFirewallPolicyLink_STATUS); ok {
+		err := augmentedLink.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_EndpointProperties_WebApplicationFirewallPolicyLink_STATUS populates the provided destination EndpointProperties_WebApplicationFirewallPolicyLink_STATUS from our EndpointProperties_WebApplicationFirewallPolicyLink_STATUS
+func (link *EndpointProperties_WebApplicationFirewallPolicyLink_STATUS) AssignProperties_To_EndpointProperties_WebApplicationFirewallPolicyLink_STATUS(destination *v20230501s.EndpointProperties_WebApplicationFirewallPolicyLink_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(link.PropertyBag)
+
+	// Id
+	destination.Id = genruntime.ClonePointerToString(link.Id)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForEndpointProperties_WebApplicationFirewallPolicyLink_STATUS interface (if implemented) to customize the conversion
+	var linkAsAny any = link
+	if augmentedLink, ok := linkAsAny.(augmentConversionForEndpointProperties_WebApplicationFirewallPolicyLink_STATUS); ok {
+		err := augmentedLink.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.GeoFilter
@@ -347,6 +1674,74 @@ type GeoFilter struct {
 	RelativePath *string                `json:"relativePath,omitempty"`
 }
 
+// AssignProperties_From_GeoFilter populates our GeoFilter from the provided source GeoFilter
+func (filter *GeoFilter) AssignProperties_From_GeoFilter(source *v20230501s.GeoFilter) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Action
+	filter.Action = genruntime.ClonePointerToString(source.Action)
+
+	// CountryCodes
+	filter.CountryCodes = genruntime.CloneSliceOfString(source.CountryCodes)
+
+	// RelativePath
+	filter.RelativePath = genruntime.ClonePointerToString(source.RelativePath)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		filter.PropertyBag = propertyBag
+	} else {
+		filter.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForGeoFilter interface (if implemented) to customize the conversion
+	var filterAsAny any = filter
+	if augmentedFilter, ok := filterAsAny.(augmentConversionForGeoFilter); ok {
+		err := augmentedFilter.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_GeoFilter populates the provided destination GeoFilter from our GeoFilter
+func (filter *GeoFilter) AssignProperties_To_GeoFilter(destination *v20230501s.GeoFilter) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(filter.PropertyBag)
+
+	// Action
+	destination.Action = genruntime.ClonePointerToString(filter.Action)
+
+	// CountryCodes
+	destination.CountryCodes = genruntime.CloneSliceOfString(filter.CountryCodes)
+
+	// RelativePath
+	destination.RelativePath = genruntime.ClonePointerToString(filter.RelativePath)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForGeoFilter interface (if implemented) to customize the conversion
+	var filterAsAny any = filter
+	if augmentedFilter, ok := filterAsAny.(augmentConversionForGeoFilter); ok {
+		err := augmentedFilter.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.GeoFilter_STATUS
 // Rules defining user's geo access within a CDN endpoint.
 type GeoFilter_STATUS struct {
@@ -354,6 +1749,74 @@ type GeoFilter_STATUS struct {
 	CountryCodes []string               `json:"countryCodes,omitempty"`
 	PropertyBag  genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	RelativePath *string                `json:"relativePath,omitempty"`
+}
+
+// AssignProperties_From_GeoFilter_STATUS populates our GeoFilter_STATUS from the provided source GeoFilter_STATUS
+func (filter *GeoFilter_STATUS) AssignProperties_From_GeoFilter_STATUS(source *v20230501s.GeoFilter_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Action
+	filter.Action = genruntime.ClonePointerToString(source.Action)
+
+	// CountryCodes
+	filter.CountryCodes = genruntime.CloneSliceOfString(source.CountryCodes)
+
+	// RelativePath
+	filter.RelativePath = genruntime.ClonePointerToString(source.RelativePath)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		filter.PropertyBag = propertyBag
+	} else {
+		filter.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForGeoFilter_STATUS interface (if implemented) to customize the conversion
+	var filterAsAny any = filter
+	if augmentedFilter, ok := filterAsAny.(augmentConversionForGeoFilter_STATUS); ok {
+		err := augmentedFilter.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_GeoFilter_STATUS populates the provided destination GeoFilter_STATUS from our GeoFilter_STATUS
+func (filter *GeoFilter_STATUS) AssignProperties_To_GeoFilter_STATUS(destination *v20230501s.GeoFilter_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(filter.PropertyBag)
+
+	// Action
+	destination.Action = genruntime.ClonePointerToString(filter.Action)
+
+	// CountryCodes
+	destination.CountryCodes = genruntime.CloneSliceOfString(filter.CountryCodes)
+
+	// RelativePath
+	destination.RelativePath = genruntime.ClonePointerToString(filter.RelativePath)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForGeoFilter_STATUS interface (if implemented) to customize the conversion
+	var filterAsAny any = filter
+	if augmentedFilter, ok := filterAsAny.(augmentConversionForGeoFilter_STATUS); ok {
+		err := augmentedFilter.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.ResourceReference
@@ -365,11 +1828,133 @@ type ResourceReference struct {
 	Reference *genruntime.ResourceReference `armReference:"Id" json:"reference,omitempty"`
 }
 
+// AssignProperties_From_ResourceReference populates our ResourceReference from the provided source ResourceReference
+func (reference *ResourceReference) AssignProperties_From_ResourceReference(source *v20230501s.ResourceReference) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Reference
+	if source.Reference != nil {
+		referenceTemp := source.Reference.Copy()
+		reference.Reference = &referenceTemp
+	} else {
+		reference.Reference = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		reference.PropertyBag = propertyBag
+	} else {
+		reference.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForResourceReference interface (if implemented) to customize the conversion
+	var referenceAsAny any = reference
+	if augmentedReference, ok := referenceAsAny.(augmentConversionForResourceReference); ok {
+		err := augmentedReference.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_ResourceReference populates the provided destination ResourceReference from our ResourceReference
+func (reference *ResourceReference) AssignProperties_To_ResourceReference(destination *v20230501s.ResourceReference) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(reference.PropertyBag)
+
+	// Reference
+	if reference.Reference != nil {
+		referenceTemp := reference.Reference.Copy()
+		destination.Reference = &referenceTemp
+	} else {
+		destination.Reference = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForResourceReference interface (if implemented) to customize the conversion
+	var referenceAsAny any = reference
+	if augmentedReference, ok := referenceAsAny.(augmentConversionForResourceReference); ok {
+		err := augmentedReference.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.ResourceReference_STATUS
 // Reference to another resource.
 type ResourceReference_STATUS struct {
 	Id          *string                `json:"id,omitempty"`
 	PropertyBag genruntime.PropertyBag `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_ResourceReference_STATUS populates our ResourceReference_STATUS from the provided source ResourceReference_STATUS
+func (reference *ResourceReference_STATUS) AssignProperties_From_ResourceReference_STATUS(source *v20230501s.ResourceReference_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Id
+	reference.Id = genruntime.ClonePointerToString(source.Id)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		reference.PropertyBag = propertyBag
+	} else {
+		reference.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForResourceReference_STATUS interface (if implemented) to customize the conversion
+	var referenceAsAny any = reference
+	if augmentedReference, ok := referenceAsAny.(augmentConversionForResourceReference_STATUS); ok {
+		err := augmentedReference.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_ResourceReference_STATUS populates the provided destination ResourceReference_STATUS from our ResourceReference_STATUS
+func (reference *ResourceReference_STATUS) AssignProperties_To_ResourceReference_STATUS(destination *v20230501s.ResourceReference_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(reference.PropertyBag)
+
+	// Id
+	destination.Id = genruntime.ClonePointerToString(reference.Id)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForResourceReference_STATUS interface (if implemented) to customize the conversion
+	var referenceAsAny any = reference
+	if augmentedReference, ok := referenceAsAny.(augmentConversionForResourceReference_STATUS); ok {
+		err := augmentedReference.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.UrlSigningKey
@@ -380,12 +1965,227 @@ type UrlSigningKey struct {
 	PropertyBag         genruntime.PropertyBag        `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_UrlSigningKey populates our UrlSigningKey from the provided source UrlSigningKey
+func (signingKey *UrlSigningKey) AssignProperties_From_UrlSigningKey(source *v20230501s.UrlSigningKey) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// KeyId
+	signingKey.KeyId = genruntime.ClonePointerToString(source.KeyId)
+
+	// KeySourceParameters
+	if source.KeySourceParameters != nil {
+		var keySourceParameter KeyVaultSigningKeyParameters
+		err := keySourceParameter.AssignProperties_From_KeyVaultSigningKeyParameters(source.KeySourceParameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_KeyVaultSigningKeyParameters() to populate field KeySourceParameters")
+		}
+		signingKey.KeySourceParameters = &keySourceParameter
+	} else {
+		signingKey.KeySourceParameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		signingKey.PropertyBag = propertyBag
+	} else {
+		signingKey.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningKey interface (if implemented) to customize the conversion
+	var signingKeyAsAny any = signingKey
+	if augmentedSigningKey, ok := signingKeyAsAny.(augmentConversionForUrlSigningKey); ok {
+		err := augmentedSigningKey.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlSigningKey populates the provided destination UrlSigningKey from our UrlSigningKey
+func (signingKey *UrlSigningKey) AssignProperties_To_UrlSigningKey(destination *v20230501s.UrlSigningKey) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(signingKey.PropertyBag)
+
+	// KeyId
+	destination.KeyId = genruntime.ClonePointerToString(signingKey.KeyId)
+
+	// KeySourceParameters
+	if signingKey.KeySourceParameters != nil {
+		var keySourceParameter v20230501s.KeyVaultSigningKeyParameters
+		err := signingKey.KeySourceParameters.AssignProperties_To_KeyVaultSigningKeyParameters(&keySourceParameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_KeyVaultSigningKeyParameters() to populate field KeySourceParameters")
+		}
+		destination.KeySourceParameters = &keySourceParameter
+	} else {
+		destination.KeySourceParameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningKey interface (if implemented) to customize the conversion
+	var signingKeyAsAny any = signingKey
+	if augmentedSigningKey, ok := signingKeyAsAny.(augmentConversionForUrlSigningKey); ok {
+		err := augmentedSigningKey.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.UrlSigningKey_STATUS
 // Url signing key
 type UrlSigningKey_STATUS struct {
 	KeyId               *string                              `json:"keyId,omitempty"`
 	KeySourceParameters *KeyVaultSigningKeyParameters_STATUS `json:"keySourceParameters,omitempty"`
 	PropertyBag         genruntime.PropertyBag               `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_UrlSigningKey_STATUS populates our UrlSigningKey_STATUS from the provided source UrlSigningKey_STATUS
+func (signingKey *UrlSigningKey_STATUS) AssignProperties_From_UrlSigningKey_STATUS(source *v20230501s.UrlSigningKey_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// KeyId
+	signingKey.KeyId = genruntime.ClonePointerToString(source.KeyId)
+
+	// KeySourceParameters
+	if source.KeySourceParameters != nil {
+		var keySourceParameter KeyVaultSigningKeyParameters_STATUS
+		err := keySourceParameter.AssignProperties_From_KeyVaultSigningKeyParameters_STATUS(source.KeySourceParameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_KeyVaultSigningKeyParameters_STATUS() to populate field KeySourceParameters")
+		}
+		signingKey.KeySourceParameters = &keySourceParameter
+	} else {
+		signingKey.KeySourceParameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		signingKey.PropertyBag = propertyBag
+	} else {
+		signingKey.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningKey_STATUS interface (if implemented) to customize the conversion
+	var signingKeyAsAny any = signingKey
+	if augmentedSigningKey, ok := signingKeyAsAny.(augmentConversionForUrlSigningKey_STATUS); ok {
+		err := augmentedSigningKey.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlSigningKey_STATUS populates the provided destination UrlSigningKey_STATUS from our UrlSigningKey_STATUS
+func (signingKey *UrlSigningKey_STATUS) AssignProperties_To_UrlSigningKey_STATUS(destination *v20230501s.UrlSigningKey_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(signingKey.PropertyBag)
+
+	// KeyId
+	destination.KeyId = genruntime.ClonePointerToString(signingKey.KeyId)
+
+	// KeySourceParameters
+	if signingKey.KeySourceParameters != nil {
+		var keySourceParameter v20230501s.KeyVaultSigningKeyParameters_STATUS
+		err := signingKey.KeySourceParameters.AssignProperties_To_KeyVaultSigningKeyParameters_STATUS(&keySourceParameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_KeyVaultSigningKeyParameters_STATUS() to populate field KeySourceParameters")
+		}
+		destination.KeySourceParameters = &keySourceParameter
+	} else {
+		destination.KeySourceParameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningKey_STATUS interface (if implemented) to customize the conversion
+	var signingKeyAsAny any = signingKey
+	if augmentedSigningKey, ok := signingKeyAsAny.(augmentConversionForUrlSigningKey_STATUS); ok {
+		err := augmentedSigningKey.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+type augmentConversionForDeepCreatedCustomDomain_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeepCreatedCustomDomain_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeepCreatedCustomDomain_STATUS) error
+}
+
+type augmentConversionForEndpointProperties_DeliveryPolicy interface {
+	AssignPropertiesFrom(src *v20230501s.EndpointProperties_DeliveryPolicy) error
+	AssignPropertiesTo(dst *v20230501s.EndpointProperties_DeliveryPolicy) error
+}
+
+type augmentConversionForEndpointProperties_DeliveryPolicy_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.EndpointProperties_DeliveryPolicy_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.EndpointProperties_DeliveryPolicy_STATUS) error
+}
+
+type augmentConversionForEndpointProperties_WebApplicationFirewallPolicyLink interface {
+	AssignPropertiesFrom(src *v20230501s.EndpointProperties_WebApplicationFirewallPolicyLink) error
+	AssignPropertiesTo(dst *v20230501s.EndpointProperties_WebApplicationFirewallPolicyLink) error
+}
+
+type augmentConversionForEndpointProperties_WebApplicationFirewallPolicyLink_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.EndpointProperties_WebApplicationFirewallPolicyLink_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.EndpointProperties_WebApplicationFirewallPolicyLink_STATUS) error
+}
+
+type augmentConversionForGeoFilter interface {
+	AssignPropertiesFrom(src *v20230501s.GeoFilter) error
+	AssignPropertiesTo(dst *v20230501s.GeoFilter) error
+}
+
+type augmentConversionForGeoFilter_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.GeoFilter_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.GeoFilter_STATUS) error
+}
+
+type augmentConversionForResourceReference interface {
+	AssignPropertiesFrom(src *v20230501s.ResourceReference) error
+	AssignPropertiesTo(dst *v20230501s.ResourceReference) error
+}
+
+type augmentConversionForResourceReference_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.ResourceReference_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.ResourceReference_STATUS) error
+}
+
+type augmentConversionForUrlSigningKey interface {
+	AssignPropertiesFrom(src *v20230501s.UrlSigningKey) error
+	AssignPropertiesTo(dst *v20230501s.UrlSigningKey) error
+}
+
+type augmentConversionForUrlSigningKey_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.UrlSigningKey_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.UrlSigningKey_STATUS) error
 }
 
 // Storage version of v1api20210601.DeliveryRule
@@ -398,6 +2198,140 @@ type DeliveryRule struct {
 	PropertyBag genruntime.PropertyBag  `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRule populates our DeliveryRule from the provided source DeliveryRule
+func (rule *DeliveryRule) AssignProperties_From_DeliveryRule(source *v20230501s.DeliveryRule) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Actions
+	if source.Actions != nil {
+		actionList := make([]DeliveryRuleAction, len(source.Actions))
+		for actionIndex, actionItem := range source.Actions {
+			// Shadow the loop variable to avoid aliasing
+			actionItem := actionItem
+			var action DeliveryRuleAction
+			err := action.AssignProperties_From_DeliveryRuleAction(&actionItem)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleAction() to populate field Actions")
+			}
+			actionList[actionIndex] = action
+		}
+		rule.Actions = actionList
+	} else {
+		rule.Actions = nil
+	}
+
+	// Conditions
+	if source.Conditions != nil {
+		conditionList := make([]DeliveryRuleCondition, len(source.Conditions))
+		for conditionIndex, conditionItem := range source.Conditions {
+			// Shadow the loop variable to avoid aliasing
+			conditionItem := conditionItem
+			var condition DeliveryRuleCondition
+			err := condition.AssignProperties_From_DeliveryRuleCondition(&conditionItem)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleCondition() to populate field Conditions")
+			}
+			conditionList[conditionIndex] = condition
+		}
+		rule.Conditions = conditionList
+	} else {
+		rule.Conditions = nil
+	}
+
+	// Name
+	rule.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Order
+	rule.Order = genruntime.ClonePointerToInt(source.Order)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		rule.PropertyBag = propertyBag
+	} else {
+		rule.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRule interface (if implemented) to customize the conversion
+	var ruleAsAny any = rule
+	if augmentedRule, ok := ruleAsAny.(augmentConversionForDeliveryRule); ok {
+		err := augmentedRule.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRule populates the provided destination DeliveryRule from our DeliveryRule
+func (rule *DeliveryRule) AssignProperties_To_DeliveryRule(destination *v20230501s.DeliveryRule) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(rule.PropertyBag)
+
+	// Actions
+	if rule.Actions != nil {
+		actionList := make([]v20230501s.DeliveryRuleAction, len(rule.Actions))
+		for actionIndex, actionItem := range rule.Actions {
+			// Shadow the loop variable to avoid aliasing
+			actionItem := actionItem
+			var action v20230501s.DeliveryRuleAction
+			err := actionItem.AssignProperties_To_DeliveryRuleAction(&action)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleAction() to populate field Actions")
+			}
+			actionList[actionIndex] = action
+		}
+		destination.Actions = actionList
+	} else {
+		destination.Actions = nil
+	}
+
+	// Conditions
+	if rule.Conditions != nil {
+		conditionList := make([]v20230501s.DeliveryRuleCondition, len(rule.Conditions))
+		for conditionIndex, conditionItem := range rule.Conditions {
+			// Shadow the loop variable to avoid aliasing
+			conditionItem := conditionItem
+			var condition v20230501s.DeliveryRuleCondition
+			err := conditionItem.AssignProperties_To_DeliveryRuleCondition(&condition)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleCondition() to populate field Conditions")
+			}
+			conditionList[conditionIndex] = condition
+		}
+		destination.Conditions = conditionList
+	} else {
+		destination.Conditions = nil
+	}
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(rule.Name)
+
+	// Order
+	destination.Order = genruntime.ClonePointerToInt(rule.Order)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRule interface (if implemented) to customize the conversion
+	var ruleAsAny any = rule
+	if augmentedRule, ok := ruleAsAny.(augmentConversionForDeliveryRule); ok {
+		err := augmentedRule.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRule_STATUS
 // A rule that specifies a set of actions and conditions
 type DeliveryRule_STATUS struct {
@@ -406,6 +2340,140 @@ type DeliveryRule_STATUS struct {
 	Name        *string                        `json:"name,omitempty"`
 	Order       *int                           `json:"order,omitempty"`
 	PropertyBag genruntime.PropertyBag         `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRule_STATUS populates our DeliveryRule_STATUS from the provided source DeliveryRule_STATUS
+func (rule *DeliveryRule_STATUS) AssignProperties_From_DeliveryRule_STATUS(source *v20230501s.DeliveryRule_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Actions
+	if source.Actions != nil {
+		actionList := make([]DeliveryRuleAction_STATUS, len(source.Actions))
+		for actionIndex, actionItem := range source.Actions {
+			// Shadow the loop variable to avoid aliasing
+			actionItem := actionItem
+			var action DeliveryRuleAction_STATUS
+			err := action.AssignProperties_From_DeliveryRuleAction_STATUS(&actionItem)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleAction_STATUS() to populate field Actions")
+			}
+			actionList[actionIndex] = action
+		}
+		rule.Actions = actionList
+	} else {
+		rule.Actions = nil
+	}
+
+	// Conditions
+	if source.Conditions != nil {
+		conditionList := make([]DeliveryRuleCondition_STATUS, len(source.Conditions))
+		for conditionIndex, conditionItem := range source.Conditions {
+			// Shadow the loop variable to avoid aliasing
+			conditionItem := conditionItem
+			var condition DeliveryRuleCondition_STATUS
+			err := condition.AssignProperties_From_DeliveryRuleCondition_STATUS(&conditionItem)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleCondition_STATUS() to populate field Conditions")
+			}
+			conditionList[conditionIndex] = condition
+		}
+		rule.Conditions = conditionList
+	} else {
+		rule.Conditions = nil
+	}
+
+	// Name
+	rule.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Order
+	rule.Order = genruntime.ClonePointerToInt(source.Order)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		rule.PropertyBag = propertyBag
+	} else {
+		rule.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRule_STATUS interface (if implemented) to customize the conversion
+	var ruleAsAny any = rule
+	if augmentedRule, ok := ruleAsAny.(augmentConversionForDeliveryRule_STATUS); ok {
+		err := augmentedRule.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRule_STATUS populates the provided destination DeliveryRule_STATUS from our DeliveryRule_STATUS
+func (rule *DeliveryRule_STATUS) AssignProperties_To_DeliveryRule_STATUS(destination *v20230501s.DeliveryRule_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(rule.PropertyBag)
+
+	// Actions
+	if rule.Actions != nil {
+		actionList := make([]v20230501s.DeliveryRuleAction_STATUS, len(rule.Actions))
+		for actionIndex, actionItem := range rule.Actions {
+			// Shadow the loop variable to avoid aliasing
+			actionItem := actionItem
+			var action v20230501s.DeliveryRuleAction_STATUS
+			err := actionItem.AssignProperties_To_DeliveryRuleAction_STATUS(&action)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleAction_STATUS() to populate field Actions")
+			}
+			actionList[actionIndex] = action
+		}
+		destination.Actions = actionList
+	} else {
+		destination.Actions = nil
+	}
+
+	// Conditions
+	if rule.Conditions != nil {
+		conditionList := make([]v20230501s.DeliveryRuleCondition_STATUS, len(rule.Conditions))
+		for conditionIndex, conditionItem := range rule.Conditions {
+			// Shadow the loop variable to avoid aliasing
+			conditionItem := conditionItem
+			var condition v20230501s.DeliveryRuleCondition_STATUS
+			err := conditionItem.AssignProperties_To_DeliveryRuleCondition_STATUS(&condition)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleCondition_STATUS() to populate field Conditions")
+			}
+			conditionList[conditionIndex] = condition
+		}
+		destination.Conditions = conditionList
+	} else {
+		destination.Conditions = nil
+	}
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(rule.Name)
+
+	// Order
+	destination.Order = genruntime.ClonePointerToInt(rule.Order)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRule_STATUS interface (if implemented) to customize the conversion
+	var ruleAsAny any = rule
+	if augmentedRule, ok := ruleAsAny.(augmentConversionForDeliveryRule_STATUS); ok {
+		err := augmentedRule.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.HealthProbeParameters
@@ -440,6 +2508,92 @@ type KeyVaultSigningKeyParameters struct {
 	VaultName         *string                `json:"vaultName,omitempty"`
 }
 
+// AssignProperties_From_KeyVaultSigningKeyParameters populates our KeyVaultSigningKeyParameters from the provided source KeyVaultSigningKeyParameters
+func (parameters *KeyVaultSigningKeyParameters) AssignProperties_From_KeyVaultSigningKeyParameters(source *v20230501s.KeyVaultSigningKeyParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// ResourceGroupName
+	parameters.ResourceGroupName = genruntime.ClonePointerToString(source.ResourceGroupName)
+
+	// SecretName
+	parameters.SecretName = genruntime.ClonePointerToString(source.SecretName)
+
+	// SecretVersion
+	parameters.SecretVersion = genruntime.ClonePointerToString(source.SecretVersion)
+
+	// SubscriptionId
+	parameters.SubscriptionId = genruntime.ClonePointerToString(source.SubscriptionId)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// VaultName
+	parameters.VaultName = genruntime.ClonePointerToString(source.VaultName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForKeyVaultSigningKeyParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForKeyVaultSigningKeyParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_KeyVaultSigningKeyParameters populates the provided destination KeyVaultSigningKeyParameters from our KeyVaultSigningKeyParameters
+func (parameters *KeyVaultSigningKeyParameters) AssignProperties_To_KeyVaultSigningKeyParameters(destination *v20230501s.KeyVaultSigningKeyParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// ResourceGroupName
+	destination.ResourceGroupName = genruntime.ClonePointerToString(parameters.ResourceGroupName)
+
+	// SecretName
+	destination.SecretName = genruntime.ClonePointerToString(parameters.SecretName)
+
+	// SecretVersion
+	destination.SecretVersion = genruntime.ClonePointerToString(parameters.SecretVersion)
+
+	// SubscriptionId
+	destination.SubscriptionId = genruntime.ClonePointerToString(parameters.SubscriptionId)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// VaultName
+	destination.VaultName = genruntime.ClonePointerToString(parameters.VaultName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForKeyVaultSigningKeyParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForKeyVaultSigningKeyParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.KeyVaultSigningKeyParameters_STATUS
 // Describes the parameters for using a user's KeyVault for URL Signing Key.
 type KeyVaultSigningKeyParameters_STATUS struct {
@@ -450,6 +2604,92 @@ type KeyVaultSigningKeyParameters_STATUS struct {
 	SubscriptionId    *string                `json:"subscriptionId,omitempty"`
 	TypeName          *string                `json:"typeName,omitempty"`
 	VaultName         *string                `json:"vaultName,omitempty"`
+}
+
+// AssignProperties_From_KeyVaultSigningKeyParameters_STATUS populates our KeyVaultSigningKeyParameters_STATUS from the provided source KeyVaultSigningKeyParameters_STATUS
+func (parameters *KeyVaultSigningKeyParameters_STATUS) AssignProperties_From_KeyVaultSigningKeyParameters_STATUS(source *v20230501s.KeyVaultSigningKeyParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// ResourceGroupName
+	parameters.ResourceGroupName = genruntime.ClonePointerToString(source.ResourceGroupName)
+
+	// SecretName
+	parameters.SecretName = genruntime.ClonePointerToString(source.SecretName)
+
+	// SecretVersion
+	parameters.SecretVersion = genruntime.ClonePointerToString(source.SecretVersion)
+
+	// SubscriptionId
+	parameters.SubscriptionId = genruntime.ClonePointerToString(source.SubscriptionId)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// VaultName
+	parameters.VaultName = genruntime.ClonePointerToString(source.VaultName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForKeyVaultSigningKeyParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForKeyVaultSigningKeyParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_KeyVaultSigningKeyParameters_STATUS populates the provided destination KeyVaultSigningKeyParameters_STATUS from our KeyVaultSigningKeyParameters_STATUS
+func (parameters *KeyVaultSigningKeyParameters_STATUS) AssignProperties_To_KeyVaultSigningKeyParameters_STATUS(destination *v20230501s.KeyVaultSigningKeyParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// ResourceGroupName
+	destination.ResourceGroupName = genruntime.ClonePointerToString(parameters.ResourceGroupName)
+
+	// SecretName
+	destination.SecretName = genruntime.ClonePointerToString(parameters.SecretName)
+
+	// SecretVersion
+	destination.SecretVersion = genruntime.ClonePointerToString(parameters.SecretVersion)
+
+	// SubscriptionId
+	destination.SubscriptionId = genruntime.ClonePointerToString(parameters.SubscriptionId)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// VaultName
+	destination.VaultName = genruntime.ClonePointerToString(parameters.VaultName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForKeyVaultSigningKeyParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForKeyVaultSigningKeyParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.ResponseBasedOriginErrorDetectionParameters
@@ -470,6 +2710,26 @@ type ResponseBasedOriginErrorDetectionParameters_STATUS struct {
 	ResponseBasedFailoverThresholdPercentage *int                              `json:"responseBasedFailoverThresholdPercentage,omitempty"`
 }
 
+type augmentConversionForDeliveryRule interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRule) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRule) error
+}
+
+type augmentConversionForDeliveryRule_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRule_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRule_STATUS) error
+}
+
+type augmentConversionForKeyVaultSigningKeyParameters interface {
+	AssignPropertiesFrom(src *v20230501s.KeyVaultSigningKeyParameters) error
+	AssignPropertiesTo(dst *v20230501s.KeyVaultSigningKeyParameters) error
+}
+
+type augmentConversionForKeyVaultSigningKeyParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.KeyVaultSigningKeyParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.KeyVaultSigningKeyParameters_STATUS) error
+}
+
 // Storage version of v1api20210601.DeliveryRuleAction
 // An action for the delivery rule.
 type DeliveryRuleAction struct {
@@ -485,6 +2745,272 @@ type DeliveryRuleAction struct {
 	UrlSigning                 *UrlSigningAction                             `json:"urlSigning,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleAction populates our DeliveryRuleAction from the provided source DeliveryRuleAction
+func (action *DeliveryRuleAction) AssignProperties_From_DeliveryRuleAction(source *v20230501s.DeliveryRuleAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// CacheExpiration
+	if source.CacheExpiration != nil {
+		var cacheExpiration DeliveryRuleCacheExpirationAction
+		err := cacheExpiration.AssignProperties_From_DeliveryRuleCacheExpirationAction(source.CacheExpiration)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleCacheExpirationAction() to populate field CacheExpiration")
+		}
+		action.CacheExpiration = &cacheExpiration
+	} else {
+		action.CacheExpiration = nil
+	}
+
+	// CacheKeyQueryString
+	if source.CacheKeyQueryString != nil {
+		var cacheKeyQueryString DeliveryRuleCacheKeyQueryStringAction
+		err := cacheKeyQueryString.AssignProperties_From_DeliveryRuleCacheKeyQueryStringAction(source.CacheKeyQueryString)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleCacheKeyQueryStringAction() to populate field CacheKeyQueryString")
+		}
+		action.CacheKeyQueryString = &cacheKeyQueryString
+	} else {
+		action.CacheKeyQueryString = nil
+	}
+
+	// ModifyRequestHeader
+	if source.ModifyRequestHeader != nil {
+		var modifyRequestHeader DeliveryRuleRequestHeaderAction
+		err := modifyRequestHeader.AssignProperties_From_DeliveryRuleRequestHeaderAction(source.ModifyRequestHeader)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRequestHeaderAction() to populate field ModifyRequestHeader")
+		}
+		action.ModifyRequestHeader = &modifyRequestHeader
+	} else {
+		action.ModifyRequestHeader = nil
+	}
+
+	// ModifyResponseHeader
+	if source.ModifyResponseHeader != nil {
+		var modifyResponseHeader DeliveryRuleResponseHeaderAction
+		err := modifyResponseHeader.AssignProperties_From_DeliveryRuleResponseHeaderAction(source.ModifyResponseHeader)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleResponseHeaderAction() to populate field ModifyResponseHeader")
+		}
+		action.ModifyResponseHeader = &modifyResponseHeader
+	} else {
+		action.ModifyResponseHeader = nil
+	}
+
+	// OriginGroupOverride
+	if source.OriginGroupOverride != nil {
+		var originGroupOverride OriginGroupOverrideAction
+		err := originGroupOverride.AssignProperties_From_OriginGroupOverrideAction(source.OriginGroupOverride)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_OriginGroupOverrideAction() to populate field OriginGroupOverride")
+		}
+		action.OriginGroupOverride = &originGroupOverride
+	} else {
+		action.OriginGroupOverride = nil
+	}
+
+	// RouteConfigurationOverride
+	if source.RouteConfigurationOverride != nil {
+		var routeConfigurationOverride DeliveryRuleRouteConfigurationOverrideAction
+		err := routeConfigurationOverride.AssignProperties_From_DeliveryRuleRouteConfigurationOverrideAction(source.RouteConfigurationOverride)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRouteConfigurationOverrideAction() to populate field RouteConfigurationOverride")
+		}
+		action.RouteConfigurationOverride = &routeConfigurationOverride
+	} else {
+		action.RouteConfigurationOverride = nil
+	}
+
+	// UrlRedirect
+	if source.UrlRedirect != nil {
+		var urlRedirect UrlRedirectAction
+		err := urlRedirect.AssignProperties_From_UrlRedirectAction(source.UrlRedirect)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlRedirectAction() to populate field UrlRedirect")
+		}
+		action.UrlRedirect = &urlRedirect
+	} else {
+		action.UrlRedirect = nil
+	}
+
+	// UrlRewrite
+	if source.UrlRewrite != nil {
+		var urlRewrite UrlRewriteAction
+		err := urlRewrite.AssignProperties_From_UrlRewriteAction(source.UrlRewrite)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlRewriteAction() to populate field UrlRewrite")
+		}
+		action.UrlRewrite = &urlRewrite
+	} else {
+		action.UrlRewrite = nil
+	}
+
+	// UrlSigning
+	if source.UrlSigning != nil {
+		var urlSigning UrlSigningAction
+		err := urlSigning.AssignProperties_From_UrlSigningAction(source.UrlSigning)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlSigningAction() to populate field UrlSigning")
+		}
+		action.UrlSigning = &urlSigning
+	} else {
+		action.UrlSigning = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleAction); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleAction populates the provided destination DeliveryRuleAction from our DeliveryRuleAction
+func (action *DeliveryRuleAction) AssignProperties_To_DeliveryRuleAction(destination *v20230501s.DeliveryRuleAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// CacheExpiration
+	if action.CacheExpiration != nil {
+		var cacheExpiration v20230501s.DeliveryRuleCacheExpirationAction
+		err := action.CacheExpiration.AssignProperties_To_DeliveryRuleCacheExpirationAction(&cacheExpiration)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleCacheExpirationAction() to populate field CacheExpiration")
+		}
+		destination.CacheExpiration = &cacheExpiration
+	} else {
+		destination.CacheExpiration = nil
+	}
+
+	// CacheKeyQueryString
+	if action.CacheKeyQueryString != nil {
+		var cacheKeyQueryString v20230501s.DeliveryRuleCacheKeyQueryStringAction
+		err := action.CacheKeyQueryString.AssignProperties_To_DeliveryRuleCacheKeyQueryStringAction(&cacheKeyQueryString)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleCacheKeyQueryStringAction() to populate field CacheKeyQueryString")
+		}
+		destination.CacheKeyQueryString = &cacheKeyQueryString
+	} else {
+		destination.CacheKeyQueryString = nil
+	}
+
+	// ModifyRequestHeader
+	if action.ModifyRequestHeader != nil {
+		var modifyRequestHeader v20230501s.DeliveryRuleRequestHeaderAction
+		err := action.ModifyRequestHeader.AssignProperties_To_DeliveryRuleRequestHeaderAction(&modifyRequestHeader)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRequestHeaderAction() to populate field ModifyRequestHeader")
+		}
+		destination.ModifyRequestHeader = &modifyRequestHeader
+	} else {
+		destination.ModifyRequestHeader = nil
+	}
+
+	// ModifyResponseHeader
+	if action.ModifyResponseHeader != nil {
+		var modifyResponseHeader v20230501s.DeliveryRuleResponseHeaderAction
+		err := action.ModifyResponseHeader.AssignProperties_To_DeliveryRuleResponseHeaderAction(&modifyResponseHeader)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleResponseHeaderAction() to populate field ModifyResponseHeader")
+		}
+		destination.ModifyResponseHeader = &modifyResponseHeader
+	} else {
+		destination.ModifyResponseHeader = nil
+	}
+
+	// OriginGroupOverride
+	if action.OriginGroupOverride != nil {
+		var originGroupOverride v20230501s.OriginGroupOverrideAction
+		err := action.OriginGroupOverride.AssignProperties_To_OriginGroupOverrideAction(&originGroupOverride)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_OriginGroupOverrideAction() to populate field OriginGroupOverride")
+		}
+		destination.OriginGroupOverride = &originGroupOverride
+	} else {
+		destination.OriginGroupOverride = nil
+	}
+
+	// RouteConfigurationOverride
+	if action.RouteConfigurationOverride != nil {
+		var routeConfigurationOverride v20230501s.DeliveryRuleRouteConfigurationOverrideAction
+		err := action.RouteConfigurationOverride.AssignProperties_To_DeliveryRuleRouteConfigurationOverrideAction(&routeConfigurationOverride)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRouteConfigurationOverrideAction() to populate field RouteConfigurationOverride")
+		}
+		destination.RouteConfigurationOverride = &routeConfigurationOverride
+	} else {
+		destination.RouteConfigurationOverride = nil
+	}
+
+	// UrlRedirect
+	if action.UrlRedirect != nil {
+		var urlRedirect v20230501s.UrlRedirectAction
+		err := action.UrlRedirect.AssignProperties_To_UrlRedirectAction(&urlRedirect)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlRedirectAction() to populate field UrlRedirect")
+		}
+		destination.UrlRedirect = &urlRedirect
+	} else {
+		destination.UrlRedirect = nil
+	}
+
+	// UrlRewrite
+	if action.UrlRewrite != nil {
+		var urlRewrite v20230501s.UrlRewriteAction
+		err := action.UrlRewrite.AssignProperties_To_UrlRewriteAction(&urlRewrite)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlRewriteAction() to populate field UrlRewrite")
+		}
+		destination.UrlRewrite = &urlRewrite
+	} else {
+		destination.UrlRewrite = nil
+	}
+
+	// UrlSigning
+	if action.UrlSigning != nil {
+		var urlSigning v20230501s.UrlSigningAction
+		err := action.UrlSigning.AssignProperties_To_UrlSigningAction(&urlSigning)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlSigningAction() to populate field UrlSigning")
+		}
+		destination.UrlSigning = &urlSigning
+	} else {
+		destination.UrlSigning = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleAction); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleAction_STATUS
 // An action for the delivery rule.
 type DeliveryRuleAction_STATUS struct {
@@ -498,6 +3024,272 @@ type DeliveryRuleAction_STATUS struct {
 	UrlRedirect                *UrlRedirectAction_STATUS                            `json:"urlRedirect,omitempty"`
 	UrlRewrite                 *UrlRewriteAction_STATUS                             `json:"urlRewrite,omitempty"`
 	UrlSigning                 *UrlSigningAction_STATUS                             `json:"urlSigning,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleAction_STATUS populates our DeliveryRuleAction_STATUS from the provided source DeliveryRuleAction_STATUS
+func (action *DeliveryRuleAction_STATUS) AssignProperties_From_DeliveryRuleAction_STATUS(source *v20230501s.DeliveryRuleAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// CacheExpiration
+	if source.CacheExpiration != nil {
+		var cacheExpiration DeliveryRuleCacheExpirationAction_STATUS
+		err := cacheExpiration.AssignProperties_From_DeliveryRuleCacheExpirationAction_STATUS(source.CacheExpiration)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleCacheExpirationAction_STATUS() to populate field CacheExpiration")
+		}
+		action.CacheExpiration = &cacheExpiration
+	} else {
+		action.CacheExpiration = nil
+	}
+
+	// CacheKeyQueryString
+	if source.CacheKeyQueryString != nil {
+		var cacheKeyQueryString DeliveryRuleCacheKeyQueryStringAction_STATUS
+		err := cacheKeyQueryString.AssignProperties_From_DeliveryRuleCacheKeyQueryStringAction_STATUS(source.CacheKeyQueryString)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleCacheKeyQueryStringAction_STATUS() to populate field CacheKeyQueryString")
+		}
+		action.CacheKeyQueryString = &cacheKeyQueryString
+	} else {
+		action.CacheKeyQueryString = nil
+	}
+
+	// ModifyRequestHeader
+	if source.ModifyRequestHeader != nil {
+		var modifyRequestHeader DeliveryRuleRequestHeaderAction_STATUS
+		err := modifyRequestHeader.AssignProperties_From_DeliveryRuleRequestHeaderAction_STATUS(source.ModifyRequestHeader)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRequestHeaderAction_STATUS() to populate field ModifyRequestHeader")
+		}
+		action.ModifyRequestHeader = &modifyRequestHeader
+	} else {
+		action.ModifyRequestHeader = nil
+	}
+
+	// ModifyResponseHeader
+	if source.ModifyResponseHeader != nil {
+		var modifyResponseHeader DeliveryRuleResponseHeaderAction_STATUS
+		err := modifyResponseHeader.AssignProperties_From_DeliveryRuleResponseHeaderAction_STATUS(source.ModifyResponseHeader)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleResponseHeaderAction_STATUS() to populate field ModifyResponseHeader")
+		}
+		action.ModifyResponseHeader = &modifyResponseHeader
+	} else {
+		action.ModifyResponseHeader = nil
+	}
+
+	// OriginGroupOverride
+	if source.OriginGroupOverride != nil {
+		var originGroupOverride OriginGroupOverrideAction_STATUS
+		err := originGroupOverride.AssignProperties_From_OriginGroupOverrideAction_STATUS(source.OriginGroupOverride)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_OriginGroupOverrideAction_STATUS() to populate field OriginGroupOverride")
+		}
+		action.OriginGroupOverride = &originGroupOverride
+	} else {
+		action.OriginGroupOverride = nil
+	}
+
+	// RouteConfigurationOverride
+	if source.RouteConfigurationOverride != nil {
+		var routeConfigurationOverride DeliveryRuleRouteConfigurationOverrideAction_STATUS
+		err := routeConfigurationOverride.AssignProperties_From_DeliveryRuleRouteConfigurationOverrideAction_STATUS(source.RouteConfigurationOverride)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRouteConfigurationOverrideAction_STATUS() to populate field RouteConfigurationOverride")
+		}
+		action.RouteConfigurationOverride = &routeConfigurationOverride
+	} else {
+		action.RouteConfigurationOverride = nil
+	}
+
+	// UrlRedirect
+	if source.UrlRedirect != nil {
+		var urlRedirect UrlRedirectAction_STATUS
+		err := urlRedirect.AssignProperties_From_UrlRedirectAction_STATUS(source.UrlRedirect)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlRedirectAction_STATUS() to populate field UrlRedirect")
+		}
+		action.UrlRedirect = &urlRedirect
+	} else {
+		action.UrlRedirect = nil
+	}
+
+	// UrlRewrite
+	if source.UrlRewrite != nil {
+		var urlRewrite UrlRewriteAction_STATUS
+		err := urlRewrite.AssignProperties_From_UrlRewriteAction_STATUS(source.UrlRewrite)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlRewriteAction_STATUS() to populate field UrlRewrite")
+		}
+		action.UrlRewrite = &urlRewrite
+	} else {
+		action.UrlRewrite = nil
+	}
+
+	// UrlSigning
+	if source.UrlSigning != nil {
+		var urlSigning UrlSigningAction_STATUS
+		err := urlSigning.AssignProperties_From_UrlSigningAction_STATUS(source.UrlSigning)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlSigningAction_STATUS() to populate field UrlSigning")
+		}
+		action.UrlSigning = &urlSigning
+	} else {
+		action.UrlSigning = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleAction_STATUS populates the provided destination DeliveryRuleAction_STATUS from our DeliveryRuleAction_STATUS
+func (action *DeliveryRuleAction_STATUS) AssignProperties_To_DeliveryRuleAction_STATUS(destination *v20230501s.DeliveryRuleAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// CacheExpiration
+	if action.CacheExpiration != nil {
+		var cacheExpiration v20230501s.DeliveryRuleCacheExpirationAction_STATUS
+		err := action.CacheExpiration.AssignProperties_To_DeliveryRuleCacheExpirationAction_STATUS(&cacheExpiration)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleCacheExpirationAction_STATUS() to populate field CacheExpiration")
+		}
+		destination.CacheExpiration = &cacheExpiration
+	} else {
+		destination.CacheExpiration = nil
+	}
+
+	// CacheKeyQueryString
+	if action.CacheKeyQueryString != nil {
+		var cacheKeyQueryString v20230501s.DeliveryRuleCacheKeyQueryStringAction_STATUS
+		err := action.CacheKeyQueryString.AssignProperties_To_DeliveryRuleCacheKeyQueryStringAction_STATUS(&cacheKeyQueryString)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleCacheKeyQueryStringAction_STATUS() to populate field CacheKeyQueryString")
+		}
+		destination.CacheKeyQueryString = &cacheKeyQueryString
+	} else {
+		destination.CacheKeyQueryString = nil
+	}
+
+	// ModifyRequestHeader
+	if action.ModifyRequestHeader != nil {
+		var modifyRequestHeader v20230501s.DeliveryRuleRequestHeaderAction_STATUS
+		err := action.ModifyRequestHeader.AssignProperties_To_DeliveryRuleRequestHeaderAction_STATUS(&modifyRequestHeader)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRequestHeaderAction_STATUS() to populate field ModifyRequestHeader")
+		}
+		destination.ModifyRequestHeader = &modifyRequestHeader
+	} else {
+		destination.ModifyRequestHeader = nil
+	}
+
+	// ModifyResponseHeader
+	if action.ModifyResponseHeader != nil {
+		var modifyResponseHeader v20230501s.DeliveryRuleResponseHeaderAction_STATUS
+		err := action.ModifyResponseHeader.AssignProperties_To_DeliveryRuleResponseHeaderAction_STATUS(&modifyResponseHeader)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleResponseHeaderAction_STATUS() to populate field ModifyResponseHeader")
+		}
+		destination.ModifyResponseHeader = &modifyResponseHeader
+	} else {
+		destination.ModifyResponseHeader = nil
+	}
+
+	// OriginGroupOverride
+	if action.OriginGroupOverride != nil {
+		var originGroupOverride v20230501s.OriginGroupOverrideAction_STATUS
+		err := action.OriginGroupOverride.AssignProperties_To_OriginGroupOverrideAction_STATUS(&originGroupOverride)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_OriginGroupOverrideAction_STATUS() to populate field OriginGroupOverride")
+		}
+		destination.OriginGroupOverride = &originGroupOverride
+	} else {
+		destination.OriginGroupOverride = nil
+	}
+
+	// RouteConfigurationOverride
+	if action.RouteConfigurationOverride != nil {
+		var routeConfigurationOverride v20230501s.DeliveryRuleRouteConfigurationOverrideAction_STATUS
+		err := action.RouteConfigurationOverride.AssignProperties_To_DeliveryRuleRouteConfigurationOverrideAction_STATUS(&routeConfigurationOverride)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRouteConfigurationOverrideAction_STATUS() to populate field RouteConfigurationOverride")
+		}
+		destination.RouteConfigurationOverride = &routeConfigurationOverride
+	} else {
+		destination.RouteConfigurationOverride = nil
+	}
+
+	// UrlRedirect
+	if action.UrlRedirect != nil {
+		var urlRedirect v20230501s.UrlRedirectAction_STATUS
+		err := action.UrlRedirect.AssignProperties_To_UrlRedirectAction_STATUS(&urlRedirect)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlRedirectAction_STATUS() to populate field UrlRedirect")
+		}
+		destination.UrlRedirect = &urlRedirect
+	} else {
+		destination.UrlRedirect = nil
+	}
+
+	// UrlRewrite
+	if action.UrlRewrite != nil {
+		var urlRewrite v20230501s.UrlRewriteAction_STATUS
+		err := action.UrlRewrite.AssignProperties_To_UrlRewriteAction_STATUS(&urlRewrite)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlRewriteAction_STATUS() to populate field UrlRewrite")
+		}
+		destination.UrlRewrite = &urlRewrite
+	} else {
+		destination.UrlRewrite = nil
+	}
+
+	// UrlSigning
+	if action.UrlSigning != nil {
+		var urlSigning v20230501s.UrlSigningAction_STATUS
+		err := action.UrlSigning.AssignProperties_To_UrlSigningAction_STATUS(&urlSigning)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlSigningAction_STATUS() to populate field UrlSigning")
+		}
+		destination.UrlSigning = &urlSigning
+	} else {
+		destination.UrlSigning = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleCondition
@@ -525,6 +3317,512 @@ type DeliveryRuleCondition struct {
 	UrlPath          *DeliveryRuleUrlPathCondition          `json:"urlPath,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleCondition populates our DeliveryRuleCondition from the provided source DeliveryRuleCondition
+func (condition *DeliveryRuleCondition) AssignProperties_From_DeliveryRuleCondition(source *v20230501s.DeliveryRuleCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// ClientPort
+	if source.ClientPort != nil {
+		var clientPort DeliveryRuleClientPortCondition
+		err := clientPort.AssignProperties_From_DeliveryRuleClientPortCondition(source.ClientPort)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleClientPortCondition() to populate field ClientPort")
+		}
+		condition.ClientPort = &clientPort
+	} else {
+		condition.ClientPort = nil
+	}
+
+	// Cookies
+	if source.Cookies != nil {
+		var cookie DeliveryRuleCookiesCondition
+		err := cookie.AssignProperties_From_DeliveryRuleCookiesCondition(source.Cookies)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleCookiesCondition() to populate field Cookies")
+		}
+		condition.Cookies = &cookie
+	} else {
+		condition.Cookies = nil
+	}
+
+	// HostName
+	if source.HostName != nil {
+		var hostName DeliveryRuleHostNameCondition
+		err := hostName.AssignProperties_From_DeliveryRuleHostNameCondition(source.HostName)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleHostNameCondition() to populate field HostName")
+		}
+		condition.HostName = &hostName
+	} else {
+		condition.HostName = nil
+	}
+
+	// HttpVersion
+	if source.HttpVersion != nil {
+		var httpVersion DeliveryRuleHttpVersionCondition
+		err := httpVersion.AssignProperties_From_DeliveryRuleHttpVersionCondition(source.HttpVersion)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleHttpVersionCondition() to populate field HttpVersion")
+		}
+		condition.HttpVersion = &httpVersion
+	} else {
+		condition.HttpVersion = nil
+	}
+
+	// IsDevice
+	if source.IsDevice != nil {
+		var isDevice DeliveryRuleIsDeviceCondition
+		err := isDevice.AssignProperties_From_DeliveryRuleIsDeviceCondition(source.IsDevice)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleIsDeviceCondition() to populate field IsDevice")
+		}
+		condition.IsDevice = &isDevice
+	} else {
+		condition.IsDevice = nil
+	}
+
+	// PostArgs
+	if source.PostArgs != nil {
+		var postArg DeliveryRulePostArgsCondition
+		err := postArg.AssignProperties_From_DeliveryRulePostArgsCondition(source.PostArgs)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRulePostArgsCondition() to populate field PostArgs")
+		}
+		condition.PostArgs = &postArg
+	} else {
+		condition.PostArgs = nil
+	}
+
+	// QueryString
+	if source.QueryString != nil {
+		var queryString DeliveryRuleQueryStringCondition
+		err := queryString.AssignProperties_From_DeliveryRuleQueryStringCondition(source.QueryString)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleQueryStringCondition() to populate field QueryString")
+		}
+		condition.QueryString = &queryString
+	} else {
+		condition.QueryString = nil
+	}
+
+	// RemoteAddress
+	if source.RemoteAddress != nil {
+		var remoteAddress DeliveryRuleRemoteAddressCondition
+		err := remoteAddress.AssignProperties_From_DeliveryRuleRemoteAddressCondition(source.RemoteAddress)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRemoteAddressCondition() to populate field RemoteAddress")
+		}
+		condition.RemoteAddress = &remoteAddress
+	} else {
+		condition.RemoteAddress = nil
+	}
+
+	// RequestBody
+	if source.RequestBody != nil {
+		var requestBody DeliveryRuleRequestBodyCondition
+		err := requestBody.AssignProperties_From_DeliveryRuleRequestBodyCondition(source.RequestBody)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRequestBodyCondition() to populate field RequestBody")
+		}
+		condition.RequestBody = &requestBody
+	} else {
+		condition.RequestBody = nil
+	}
+
+	// RequestHeader
+	if source.RequestHeader != nil {
+		var requestHeader DeliveryRuleRequestHeaderCondition
+		err := requestHeader.AssignProperties_From_DeliveryRuleRequestHeaderCondition(source.RequestHeader)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRequestHeaderCondition() to populate field RequestHeader")
+		}
+		condition.RequestHeader = &requestHeader
+	} else {
+		condition.RequestHeader = nil
+	}
+
+	// RequestMethod
+	if source.RequestMethod != nil {
+		var requestMethod DeliveryRuleRequestMethodCondition
+		err := requestMethod.AssignProperties_From_DeliveryRuleRequestMethodCondition(source.RequestMethod)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRequestMethodCondition() to populate field RequestMethod")
+		}
+		condition.RequestMethod = &requestMethod
+	} else {
+		condition.RequestMethod = nil
+	}
+
+	// RequestScheme
+	if source.RequestScheme != nil {
+		var requestScheme DeliveryRuleRequestSchemeCondition
+		err := requestScheme.AssignProperties_From_DeliveryRuleRequestSchemeCondition(source.RequestScheme)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRequestSchemeCondition() to populate field RequestScheme")
+		}
+		condition.RequestScheme = &requestScheme
+	} else {
+		condition.RequestScheme = nil
+	}
+
+	// RequestUri
+	if source.RequestUri != nil {
+		var requestUri DeliveryRuleRequestUriCondition
+		err := requestUri.AssignProperties_From_DeliveryRuleRequestUriCondition(source.RequestUri)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRequestUriCondition() to populate field RequestUri")
+		}
+		condition.RequestUri = &requestUri
+	} else {
+		condition.RequestUri = nil
+	}
+
+	// ServerPort
+	if source.ServerPort != nil {
+		var serverPort DeliveryRuleServerPortCondition
+		err := serverPort.AssignProperties_From_DeliveryRuleServerPortCondition(source.ServerPort)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleServerPortCondition() to populate field ServerPort")
+		}
+		condition.ServerPort = &serverPort
+	} else {
+		condition.ServerPort = nil
+	}
+
+	// SocketAddr
+	if source.SocketAddr != nil {
+		var socketAddr DeliveryRuleSocketAddrCondition
+		err := socketAddr.AssignProperties_From_DeliveryRuleSocketAddrCondition(source.SocketAddr)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleSocketAddrCondition() to populate field SocketAddr")
+		}
+		condition.SocketAddr = &socketAddr
+	} else {
+		condition.SocketAddr = nil
+	}
+
+	// SslProtocol
+	if source.SslProtocol != nil {
+		var sslProtocol DeliveryRuleSslProtocolCondition
+		err := sslProtocol.AssignProperties_From_DeliveryRuleSslProtocolCondition(source.SslProtocol)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleSslProtocolCondition() to populate field SslProtocol")
+		}
+		condition.SslProtocol = &sslProtocol
+	} else {
+		condition.SslProtocol = nil
+	}
+
+	// UrlFileExtension
+	if source.UrlFileExtension != nil {
+		var urlFileExtension DeliveryRuleUrlFileExtensionCondition
+		err := urlFileExtension.AssignProperties_From_DeliveryRuleUrlFileExtensionCondition(source.UrlFileExtension)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleUrlFileExtensionCondition() to populate field UrlFileExtension")
+		}
+		condition.UrlFileExtension = &urlFileExtension
+	} else {
+		condition.UrlFileExtension = nil
+	}
+
+	// UrlFileName
+	if source.UrlFileName != nil {
+		var urlFileName DeliveryRuleUrlFileNameCondition
+		err := urlFileName.AssignProperties_From_DeliveryRuleUrlFileNameCondition(source.UrlFileName)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleUrlFileNameCondition() to populate field UrlFileName")
+		}
+		condition.UrlFileName = &urlFileName
+	} else {
+		condition.UrlFileName = nil
+	}
+
+	// UrlPath
+	if source.UrlPath != nil {
+		var urlPath DeliveryRuleUrlPathCondition
+		err := urlPath.AssignProperties_From_DeliveryRuleUrlPathCondition(source.UrlPath)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleUrlPathCondition() to populate field UrlPath")
+		}
+		condition.UrlPath = &urlPath
+	} else {
+		condition.UrlPath = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleCondition populates the provided destination DeliveryRuleCondition from our DeliveryRuleCondition
+func (condition *DeliveryRuleCondition) AssignProperties_To_DeliveryRuleCondition(destination *v20230501s.DeliveryRuleCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// ClientPort
+	if condition.ClientPort != nil {
+		var clientPort v20230501s.DeliveryRuleClientPortCondition
+		err := condition.ClientPort.AssignProperties_To_DeliveryRuleClientPortCondition(&clientPort)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleClientPortCondition() to populate field ClientPort")
+		}
+		destination.ClientPort = &clientPort
+	} else {
+		destination.ClientPort = nil
+	}
+
+	// Cookies
+	if condition.Cookies != nil {
+		var cookie v20230501s.DeliveryRuleCookiesCondition
+		err := condition.Cookies.AssignProperties_To_DeliveryRuleCookiesCondition(&cookie)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleCookiesCondition() to populate field Cookies")
+		}
+		destination.Cookies = &cookie
+	} else {
+		destination.Cookies = nil
+	}
+
+	// HostName
+	if condition.HostName != nil {
+		var hostName v20230501s.DeliveryRuleHostNameCondition
+		err := condition.HostName.AssignProperties_To_DeliveryRuleHostNameCondition(&hostName)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleHostNameCondition() to populate field HostName")
+		}
+		destination.HostName = &hostName
+	} else {
+		destination.HostName = nil
+	}
+
+	// HttpVersion
+	if condition.HttpVersion != nil {
+		var httpVersion v20230501s.DeliveryRuleHttpVersionCondition
+		err := condition.HttpVersion.AssignProperties_To_DeliveryRuleHttpVersionCondition(&httpVersion)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleHttpVersionCondition() to populate field HttpVersion")
+		}
+		destination.HttpVersion = &httpVersion
+	} else {
+		destination.HttpVersion = nil
+	}
+
+	// IsDevice
+	if condition.IsDevice != nil {
+		var isDevice v20230501s.DeliveryRuleIsDeviceCondition
+		err := condition.IsDevice.AssignProperties_To_DeliveryRuleIsDeviceCondition(&isDevice)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleIsDeviceCondition() to populate field IsDevice")
+		}
+		destination.IsDevice = &isDevice
+	} else {
+		destination.IsDevice = nil
+	}
+
+	// PostArgs
+	if condition.PostArgs != nil {
+		var postArg v20230501s.DeliveryRulePostArgsCondition
+		err := condition.PostArgs.AssignProperties_To_DeliveryRulePostArgsCondition(&postArg)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRulePostArgsCondition() to populate field PostArgs")
+		}
+		destination.PostArgs = &postArg
+	} else {
+		destination.PostArgs = nil
+	}
+
+	// QueryString
+	if condition.QueryString != nil {
+		var queryString v20230501s.DeliveryRuleQueryStringCondition
+		err := condition.QueryString.AssignProperties_To_DeliveryRuleQueryStringCondition(&queryString)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleQueryStringCondition() to populate field QueryString")
+		}
+		destination.QueryString = &queryString
+	} else {
+		destination.QueryString = nil
+	}
+
+	// RemoteAddress
+	if condition.RemoteAddress != nil {
+		var remoteAddress v20230501s.DeliveryRuleRemoteAddressCondition
+		err := condition.RemoteAddress.AssignProperties_To_DeliveryRuleRemoteAddressCondition(&remoteAddress)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRemoteAddressCondition() to populate field RemoteAddress")
+		}
+		destination.RemoteAddress = &remoteAddress
+	} else {
+		destination.RemoteAddress = nil
+	}
+
+	// RequestBody
+	if condition.RequestBody != nil {
+		var requestBody v20230501s.DeliveryRuleRequestBodyCondition
+		err := condition.RequestBody.AssignProperties_To_DeliveryRuleRequestBodyCondition(&requestBody)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRequestBodyCondition() to populate field RequestBody")
+		}
+		destination.RequestBody = &requestBody
+	} else {
+		destination.RequestBody = nil
+	}
+
+	// RequestHeader
+	if condition.RequestHeader != nil {
+		var requestHeader v20230501s.DeliveryRuleRequestHeaderCondition
+		err := condition.RequestHeader.AssignProperties_To_DeliveryRuleRequestHeaderCondition(&requestHeader)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRequestHeaderCondition() to populate field RequestHeader")
+		}
+		destination.RequestHeader = &requestHeader
+	} else {
+		destination.RequestHeader = nil
+	}
+
+	// RequestMethod
+	if condition.RequestMethod != nil {
+		var requestMethod v20230501s.DeliveryRuleRequestMethodCondition
+		err := condition.RequestMethod.AssignProperties_To_DeliveryRuleRequestMethodCondition(&requestMethod)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRequestMethodCondition() to populate field RequestMethod")
+		}
+		destination.RequestMethod = &requestMethod
+	} else {
+		destination.RequestMethod = nil
+	}
+
+	// RequestScheme
+	if condition.RequestScheme != nil {
+		var requestScheme v20230501s.DeliveryRuleRequestSchemeCondition
+		err := condition.RequestScheme.AssignProperties_To_DeliveryRuleRequestSchemeCondition(&requestScheme)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRequestSchemeCondition() to populate field RequestScheme")
+		}
+		destination.RequestScheme = &requestScheme
+	} else {
+		destination.RequestScheme = nil
+	}
+
+	// RequestUri
+	if condition.RequestUri != nil {
+		var requestUri v20230501s.DeliveryRuleRequestUriCondition
+		err := condition.RequestUri.AssignProperties_To_DeliveryRuleRequestUriCondition(&requestUri)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRequestUriCondition() to populate field RequestUri")
+		}
+		destination.RequestUri = &requestUri
+	} else {
+		destination.RequestUri = nil
+	}
+
+	// ServerPort
+	if condition.ServerPort != nil {
+		var serverPort v20230501s.DeliveryRuleServerPortCondition
+		err := condition.ServerPort.AssignProperties_To_DeliveryRuleServerPortCondition(&serverPort)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleServerPortCondition() to populate field ServerPort")
+		}
+		destination.ServerPort = &serverPort
+	} else {
+		destination.ServerPort = nil
+	}
+
+	// SocketAddr
+	if condition.SocketAddr != nil {
+		var socketAddr v20230501s.DeliveryRuleSocketAddrCondition
+		err := condition.SocketAddr.AssignProperties_To_DeliveryRuleSocketAddrCondition(&socketAddr)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleSocketAddrCondition() to populate field SocketAddr")
+		}
+		destination.SocketAddr = &socketAddr
+	} else {
+		destination.SocketAddr = nil
+	}
+
+	// SslProtocol
+	if condition.SslProtocol != nil {
+		var sslProtocol v20230501s.DeliveryRuleSslProtocolCondition
+		err := condition.SslProtocol.AssignProperties_To_DeliveryRuleSslProtocolCondition(&sslProtocol)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleSslProtocolCondition() to populate field SslProtocol")
+		}
+		destination.SslProtocol = &sslProtocol
+	} else {
+		destination.SslProtocol = nil
+	}
+
+	// UrlFileExtension
+	if condition.UrlFileExtension != nil {
+		var urlFileExtension v20230501s.DeliveryRuleUrlFileExtensionCondition
+		err := condition.UrlFileExtension.AssignProperties_To_DeliveryRuleUrlFileExtensionCondition(&urlFileExtension)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleUrlFileExtensionCondition() to populate field UrlFileExtension")
+		}
+		destination.UrlFileExtension = &urlFileExtension
+	} else {
+		destination.UrlFileExtension = nil
+	}
+
+	// UrlFileName
+	if condition.UrlFileName != nil {
+		var urlFileName v20230501s.DeliveryRuleUrlFileNameCondition
+		err := condition.UrlFileName.AssignProperties_To_DeliveryRuleUrlFileNameCondition(&urlFileName)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleUrlFileNameCondition() to populate field UrlFileName")
+		}
+		destination.UrlFileName = &urlFileName
+	} else {
+		destination.UrlFileName = nil
+	}
+
+	// UrlPath
+	if condition.UrlPath != nil {
+		var urlPath v20230501s.DeliveryRuleUrlPathCondition
+		err := condition.UrlPath.AssignProperties_To_DeliveryRuleUrlPathCondition(&urlPath)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleUrlPathCondition() to populate field UrlPath")
+		}
+		destination.UrlPath = &urlPath
+	} else {
+		destination.UrlPath = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleCondition_STATUS
 // A condition for the delivery rule.
 type DeliveryRuleCondition_STATUS struct {
@@ -550,6 +3848,512 @@ type DeliveryRuleCondition_STATUS struct {
 	UrlPath          *DeliveryRuleUrlPathCondition_STATUS          `json:"urlPath,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleCondition_STATUS populates our DeliveryRuleCondition_STATUS from the provided source DeliveryRuleCondition_STATUS
+func (condition *DeliveryRuleCondition_STATUS) AssignProperties_From_DeliveryRuleCondition_STATUS(source *v20230501s.DeliveryRuleCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// ClientPort
+	if source.ClientPort != nil {
+		var clientPort DeliveryRuleClientPortCondition_STATUS
+		err := clientPort.AssignProperties_From_DeliveryRuleClientPortCondition_STATUS(source.ClientPort)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleClientPortCondition_STATUS() to populate field ClientPort")
+		}
+		condition.ClientPort = &clientPort
+	} else {
+		condition.ClientPort = nil
+	}
+
+	// Cookies
+	if source.Cookies != nil {
+		var cookie DeliveryRuleCookiesCondition_STATUS
+		err := cookie.AssignProperties_From_DeliveryRuleCookiesCondition_STATUS(source.Cookies)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleCookiesCondition_STATUS() to populate field Cookies")
+		}
+		condition.Cookies = &cookie
+	} else {
+		condition.Cookies = nil
+	}
+
+	// HostName
+	if source.HostName != nil {
+		var hostName DeliveryRuleHostNameCondition_STATUS
+		err := hostName.AssignProperties_From_DeliveryRuleHostNameCondition_STATUS(source.HostName)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleHostNameCondition_STATUS() to populate field HostName")
+		}
+		condition.HostName = &hostName
+	} else {
+		condition.HostName = nil
+	}
+
+	// HttpVersion
+	if source.HttpVersion != nil {
+		var httpVersion DeliveryRuleHttpVersionCondition_STATUS
+		err := httpVersion.AssignProperties_From_DeliveryRuleHttpVersionCondition_STATUS(source.HttpVersion)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleHttpVersionCondition_STATUS() to populate field HttpVersion")
+		}
+		condition.HttpVersion = &httpVersion
+	} else {
+		condition.HttpVersion = nil
+	}
+
+	// IsDevice
+	if source.IsDevice != nil {
+		var isDevice DeliveryRuleIsDeviceCondition_STATUS
+		err := isDevice.AssignProperties_From_DeliveryRuleIsDeviceCondition_STATUS(source.IsDevice)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleIsDeviceCondition_STATUS() to populate field IsDevice")
+		}
+		condition.IsDevice = &isDevice
+	} else {
+		condition.IsDevice = nil
+	}
+
+	// PostArgs
+	if source.PostArgs != nil {
+		var postArg DeliveryRulePostArgsCondition_STATUS
+		err := postArg.AssignProperties_From_DeliveryRulePostArgsCondition_STATUS(source.PostArgs)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRulePostArgsCondition_STATUS() to populate field PostArgs")
+		}
+		condition.PostArgs = &postArg
+	} else {
+		condition.PostArgs = nil
+	}
+
+	// QueryString
+	if source.QueryString != nil {
+		var queryString DeliveryRuleQueryStringCondition_STATUS
+		err := queryString.AssignProperties_From_DeliveryRuleQueryStringCondition_STATUS(source.QueryString)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleQueryStringCondition_STATUS() to populate field QueryString")
+		}
+		condition.QueryString = &queryString
+	} else {
+		condition.QueryString = nil
+	}
+
+	// RemoteAddress
+	if source.RemoteAddress != nil {
+		var remoteAddress DeliveryRuleRemoteAddressCondition_STATUS
+		err := remoteAddress.AssignProperties_From_DeliveryRuleRemoteAddressCondition_STATUS(source.RemoteAddress)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRemoteAddressCondition_STATUS() to populate field RemoteAddress")
+		}
+		condition.RemoteAddress = &remoteAddress
+	} else {
+		condition.RemoteAddress = nil
+	}
+
+	// RequestBody
+	if source.RequestBody != nil {
+		var requestBody DeliveryRuleRequestBodyCondition_STATUS
+		err := requestBody.AssignProperties_From_DeliveryRuleRequestBodyCondition_STATUS(source.RequestBody)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRequestBodyCondition_STATUS() to populate field RequestBody")
+		}
+		condition.RequestBody = &requestBody
+	} else {
+		condition.RequestBody = nil
+	}
+
+	// RequestHeader
+	if source.RequestHeader != nil {
+		var requestHeader DeliveryRuleRequestHeaderCondition_STATUS
+		err := requestHeader.AssignProperties_From_DeliveryRuleRequestHeaderCondition_STATUS(source.RequestHeader)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRequestHeaderCondition_STATUS() to populate field RequestHeader")
+		}
+		condition.RequestHeader = &requestHeader
+	} else {
+		condition.RequestHeader = nil
+	}
+
+	// RequestMethod
+	if source.RequestMethod != nil {
+		var requestMethod DeliveryRuleRequestMethodCondition_STATUS
+		err := requestMethod.AssignProperties_From_DeliveryRuleRequestMethodCondition_STATUS(source.RequestMethod)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRequestMethodCondition_STATUS() to populate field RequestMethod")
+		}
+		condition.RequestMethod = &requestMethod
+	} else {
+		condition.RequestMethod = nil
+	}
+
+	// RequestScheme
+	if source.RequestScheme != nil {
+		var requestScheme DeliveryRuleRequestSchemeCondition_STATUS
+		err := requestScheme.AssignProperties_From_DeliveryRuleRequestSchemeCondition_STATUS(source.RequestScheme)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRequestSchemeCondition_STATUS() to populate field RequestScheme")
+		}
+		condition.RequestScheme = &requestScheme
+	} else {
+		condition.RequestScheme = nil
+	}
+
+	// RequestUri
+	if source.RequestUri != nil {
+		var requestUri DeliveryRuleRequestUriCondition_STATUS
+		err := requestUri.AssignProperties_From_DeliveryRuleRequestUriCondition_STATUS(source.RequestUri)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleRequestUriCondition_STATUS() to populate field RequestUri")
+		}
+		condition.RequestUri = &requestUri
+	} else {
+		condition.RequestUri = nil
+	}
+
+	// ServerPort
+	if source.ServerPort != nil {
+		var serverPort DeliveryRuleServerPortCondition_STATUS
+		err := serverPort.AssignProperties_From_DeliveryRuleServerPortCondition_STATUS(source.ServerPort)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleServerPortCondition_STATUS() to populate field ServerPort")
+		}
+		condition.ServerPort = &serverPort
+	} else {
+		condition.ServerPort = nil
+	}
+
+	// SocketAddr
+	if source.SocketAddr != nil {
+		var socketAddr DeliveryRuleSocketAddrCondition_STATUS
+		err := socketAddr.AssignProperties_From_DeliveryRuleSocketAddrCondition_STATUS(source.SocketAddr)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleSocketAddrCondition_STATUS() to populate field SocketAddr")
+		}
+		condition.SocketAddr = &socketAddr
+	} else {
+		condition.SocketAddr = nil
+	}
+
+	// SslProtocol
+	if source.SslProtocol != nil {
+		var sslProtocol DeliveryRuleSslProtocolCondition_STATUS
+		err := sslProtocol.AssignProperties_From_DeliveryRuleSslProtocolCondition_STATUS(source.SslProtocol)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleSslProtocolCondition_STATUS() to populate field SslProtocol")
+		}
+		condition.SslProtocol = &sslProtocol
+	} else {
+		condition.SslProtocol = nil
+	}
+
+	// UrlFileExtension
+	if source.UrlFileExtension != nil {
+		var urlFileExtension DeliveryRuleUrlFileExtensionCondition_STATUS
+		err := urlFileExtension.AssignProperties_From_DeliveryRuleUrlFileExtensionCondition_STATUS(source.UrlFileExtension)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleUrlFileExtensionCondition_STATUS() to populate field UrlFileExtension")
+		}
+		condition.UrlFileExtension = &urlFileExtension
+	} else {
+		condition.UrlFileExtension = nil
+	}
+
+	// UrlFileName
+	if source.UrlFileName != nil {
+		var urlFileName DeliveryRuleUrlFileNameCondition_STATUS
+		err := urlFileName.AssignProperties_From_DeliveryRuleUrlFileNameCondition_STATUS(source.UrlFileName)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleUrlFileNameCondition_STATUS() to populate field UrlFileName")
+		}
+		condition.UrlFileName = &urlFileName
+	} else {
+		condition.UrlFileName = nil
+	}
+
+	// UrlPath
+	if source.UrlPath != nil {
+		var urlPath DeliveryRuleUrlPathCondition_STATUS
+		err := urlPath.AssignProperties_From_DeliveryRuleUrlPathCondition_STATUS(source.UrlPath)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_DeliveryRuleUrlPathCondition_STATUS() to populate field UrlPath")
+		}
+		condition.UrlPath = &urlPath
+	} else {
+		condition.UrlPath = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleCondition_STATUS populates the provided destination DeliveryRuleCondition_STATUS from our DeliveryRuleCondition_STATUS
+func (condition *DeliveryRuleCondition_STATUS) AssignProperties_To_DeliveryRuleCondition_STATUS(destination *v20230501s.DeliveryRuleCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// ClientPort
+	if condition.ClientPort != nil {
+		var clientPort v20230501s.DeliveryRuleClientPortCondition_STATUS
+		err := condition.ClientPort.AssignProperties_To_DeliveryRuleClientPortCondition_STATUS(&clientPort)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleClientPortCondition_STATUS() to populate field ClientPort")
+		}
+		destination.ClientPort = &clientPort
+	} else {
+		destination.ClientPort = nil
+	}
+
+	// Cookies
+	if condition.Cookies != nil {
+		var cookie v20230501s.DeliveryRuleCookiesCondition_STATUS
+		err := condition.Cookies.AssignProperties_To_DeliveryRuleCookiesCondition_STATUS(&cookie)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleCookiesCondition_STATUS() to populate field Cookies")
+		}
+		destination.Cookies = &cookie
+	} else {
+		destination.Cookies = nil
+	}
+
+	// HostName
+	if condition.HostName != nil {
+		var hostName v20230501s.DeliveryRuleHostNameCondition_STATUS
+		err := condition.HostName.AssignProperties_To_DeliveryRuleHostNameCondition_STATUS(&hostName)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleHostNameCondition_STATUS() to populate field HostName")
+		}
+		destination.HostName = &hostName
+	} else {
+		destination.HostName = nil
+	}
+
+	// HttpVersion
+	if condition.HttpVersion != nil {
+		var httpVersion v20230501s.DeliveryRuleHttpVersionCondition_STATUS
+		err := condition.HttpVersion.AssignProperties_To_DeliveryRuleHttpVersionCondition_STATUS(&httpVersion)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleHttpVersionCondition_STATUS() to populate field HttpVersion")
+		}
+		destination.HttpVersion = &httpVersion
+	} else {
+		destination.HttpVersion = nil
+	}
+
+	// IsDevice
+	if condition.IsDevice != nil {
+		var isDevice v20230501s.DeliveryRuleIsDeviceCondition_STATUS
+		err := condition.IsDevice.AssignProperties_To_DeliveryRuleIsDeviceCondition_STATUS(&isDevice)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleIsDeviceCondition_STATUS() to populate field IsDevice")
+		}
+		destination.IsDevice = &isDevice
+	} else {
+		destination.IsDevice = nil
+	}
+
+	// PostArgs
+	if condition.PostArgs != nil {
+		var postArg v20230501s.DeliveryRulePostArgsCondition_STATUS
+		err := condition.PostArgs.AssignProperties_To_DeliveryRulePostArgsCondition_STATUS(&postArg)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRulePostArgsCondition_STATUS() to populate field PostArgs")
+		}
+		destination.PostArgs = &postArg
+	} else {
+		destination.PostArgs = nil
+	}
+
+	// QueryString
+	if condition.QueryString != nil {
+		var queryString v20230501s.DeliveryRuleQueryStringCondition_STATUS
+		err := condition.QueryString.AssignProperties_To_DeliveryRuleQueryStringCondition_STATUS(&queryString)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleQueryStringCondition_STATUS() to populate field QueryString")
+		}
+		destination.QueryString = &queryString
+	} else {
+		destination.QueryString = nil
+	}
+
+	// RemoteAddress
+	if condition.RemoteAddress != nil {
+		var remoteAddress v20230501s.DeliveryRuleRemoteAddressCondition_STATUS
+		err := condition.RemoteAddress.AssignProperties_To_DeliveryRuleRemoteAddressCondition_STATUS(&remoteAddress)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRemoteAddressCondition_STATUS() to populate field RemoteAddress")
+		}
+		destination.RemoteAddress = &remoteAddress
+	} else {
+		destination.RemoteAddress = nil
+	}
+
+	// RequestBody
+	if condition.RequestBody != nil {
+		var requestBody v20230501s.DeliveryRuleRequestBodyCondition_STATUS
+		err := condition.RequestBody.AssignProperties_To_DeliveryRuleRequestBodyCondition_STATUS(&requestBody)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRequestBodyCondition_STATUS() to populate field RequestBody")
+		}
+		destination.RequestBody = &requestBody
+	} else {
+		destination.RequestBody = nil
+	}
+
+	// RequestHeader
+	if condition.RequestHeader != nil {
+		var requestHeader v20230501s.DeliveryRuleRequestHeaderCondition_STATUS
+		err := condition.RequestHeader.AssignProperties_To_DeliveryRuleRequestHeaderCondition_STATUS(&requestHeader)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRequestHeaderCondition_STATUS() to populate field RequestHeader")
+		}
+		destination.RequestHeader = &requestHeader
+	} else {
+		destination.RequestHeader = nil
+	}
+
+	// RequestMethod
+	if condition.RequestMethod != nil {
+		var requestMethod v20230501s.DeliveryRuleRequestMethodCondition_STATUS
+		err := condition.RequestMethod.AssignProperties_To_DeliveryRuleRequestMethodCondition_STATUS(&requestMethod)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRequestMethodCondition_STATUS() to populate field RequestMethod")
+		}
+		destination.RequestMethod = &requestMethod
+	} else {
+		destination.RequestMethod = nil
+	}
+
+	// RequestScheme
+	if condition.RequestScheme != nil {
+		var requestScheme v20230501s.DeliveryRuleRequestSchemeCondition_STATUS
+		err := condition.RequestScheme.AssignProperties_To_DeliveryRuleRequestSchemeCondition_STATUS(&requestScheme)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRequestSchemeCondition_STATUS() to populate field RequestScheme")
+		}
+		destination.RequestScheme = &requestScheme
+	} else {
+		destination.RequestScheme = nil
+	}
+
+	// RequestUri
+	if condition.RequestUri != nil {
+		var requestUri v20230501s.DeliveryRuleRequestUriCondition_STATUS
+		err := condition.RequestUri.AssignProperties_To_DeliveryRuleRequestUriCondition_STATUS(&requestUri)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleRequestUriCondition_STATUS() to populate field RequestUri")
+		}
+		destination.RequestUri = &requestUri
+	} else {
+		destination.RequestUri = nil
+	}
+
+	// ServerPort
+	if condition.ServerPort != nil {
+		var serverPort v20230501s.DeliveryRuleServerPortCondition_STATUS
+		err := condition.ServerPort.AssignProperties_To_DeliveryRuleServerPortCondition_STATUS(&serverPort)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleServerPortCondition_STATUS() to populate field ServerPort")
+		}
+		destination.ServerPort = &serverPort
+	} else {
+		destination.ServerPort = nil
+	}
+
+	// SocketAddr
+	if condition.SocketAddr != nil {
+		var socketAddr v20230501s.DeliveryRuleSocketAddrCondition_STATUS
+		err := condition.SocketAddr.AssignProperties_To_DeliveryRuleSocketAddrCondition_STATUS(&socketAddr)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleSocketAddrCondition_STATUS() to populate field SocketAddr")
+		}
+		destination.SocketAddr = &socketAddr
+	} else {
+		destination.SocketAddr = nil
+	}
+
+	// SslProtocol
+	if condition.SslProtocol != nil {
+		var sslProtocol v20230501s.DeliveryRuleSslProtocolCondition_STATUS
+		err := condition.SslProtocol.AssignProperties_To_DeliveryRuleSslProtocolCondition_STATUS(&sslProtocol)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleSslProtocolCondition_STATUS() to populate field SslProtocol")
+		}
+		destination.SslProtocol = &sslProtocol
+	} else {
+		destination.SslProtocol = nil
+	}
+
+	// UrlFileExtension
+	if condition.UrlFileExtension != nil {
+		var urlFileExtension v20230501s.DeliveryRuleUrlFileExtensionCondition_STATUS
+		err := condition.UrlFileExtension.AssignProperties_To_DeliveryRuleUrlFileExtensionCondition_STATUS(&urlFileExtension)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleUrlFileExtensionCondition_STATUS() to populate field UrlFileExtension")
+		}
+		destination.UrlFileExtension = &urlFileExtension
+	} else {
+		destination.UrlFileExtension = nil
+	}
+
+	// UrlFileName
+	if condition.UrlFileName != nil {
+		var urlFileName v20230501s.DeliveryRuleUrlFileNameCondition_STATUS
+		err := condition.UrlFileName.AssignProperties_To_DeliveryRuleUrlFileNameCondition_STATUS(&urlFileName)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleUrlFileNameCondition_STATUS() to populate field UrlFileName")
+		}
+		destination.UrlFileName = &urlFileName
+	} else {
+		destination.UrlFileName = nil
+	}
+
+	// UrlPath
+	if condition.UrlPath != nil {
+		var urlPath v20230501s.DeliveryRuleUrlPathCondition_STATUS
+		err := condition.UrlPath.AssignProperties_To_DeliveryRuleUrlPathCondition_STATUS(&urlPath)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_DeliveryRuleUrlPathCondition_STATUS() to populate field UrlPath")
+		}
+		destination.UrlPath = &urlPath
+	} else {
+		destination.UrlPath = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.HttpErrorRangeParameters
 // The JSON object that represents the range for http status codes
 type HttpErrorRangeParameters struct {
@@ -566,11 +4370,111 @@ type HttpErrorRangeParameters_STATUS struct {
 	PropertyBag genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 }
 
+type augmentConversionForDeliveryRuleAction interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleAction) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleAction) error
+}
+
+type augmentConversionForDeliveryRuleAction_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleAction_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleAction_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleCondition) error
+}
+
+type augmentConversionForDeliveryRuleCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleCondition_STATUS) error
+}
+
 // Storage version of v1api20210601.DeliveryRuleCacheExpirationAction
 type DeliveryRuleCacheExpirationAction struct {
 	Name        *string                          `json:"name,omitempty"`
 	Parameters  *CacheExpirationActionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag           `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleCacheExpirationAction populates our DeliveryRuleCacheExpirationAction from the provided source DeliveryRuleCacheExpirationAction
+func (action *DeliveryRuleCacheExpirationAction) AssignProperties_From_DeliveryRuleCacheExpirationAction(source *v20230501s.DeliveryRuleCacheExpirationAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter CacheExpirationActionParameters
+		err := parameter.AssignProperties_From_CacheExpirationActionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_CacheExpirationActionParameters() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCacheExpirationAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleCacheExpirationAction); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleCacheExpirationAction populates the provided destination DeliveryRuleCacheExpirationAction from our DeliveryRuleCacheExpirationAction
+func (action *DeliveryRuleCacheExpirationAction) AssignProperties_To_DeliveryRuleCacheExpirationAction(destination *v20230501s.DeliveryRuleCacheExpirationAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.CacheExpirationActionParameters
+		err := action.Parameters.AssignProperties_To_CacheExpirationActionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_CacheExpirationActionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCacheExpirationAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleCacheExpirationAction); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleCacheExpirationAction_STATUS
@@ -580,11 +4484,171 @@ type DeliveryRuleCacheExpirationAction_STATUS struct {
 	PropertyBag genruntime.PropertyBag                  `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleCacheExpirationAction_STATUS populates our DeliveryRuleCacheExpirationAction_STATUS from the provided source DeliveryRuleCacheExpirationAction_STATUS
+func (action *DeliveryRuleCacheExpirationAction_STATUS) AssignProperties_From_DeliveryRuleCacheExpirationAction_STATUS(source *v20230501s.DeliveryRuleCacheExpirationAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter CacheExpirationActionParameters_STATUS
+		err := parameter.AssignProperties_From_CacheExpirationActionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_CacheExpirationActionParameters_STATUS() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCacheExpirationAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleCacheExpirationAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleCacheExpirationAction_STATUS populates the provided destination DeliveryRuleCacheExpirationAction_STATUS from our DeliveryRuleCacheExpirationAction_STATUS
+func (action *DeliveryRuleCacheExpirationAction_STATUS) AssignProperties_To_DeliveryRuleCacheExpirationAction_STATUS(destination *v20230501s.DeliveryRuleCacheExpirationAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.CacheExpirationActionParameters_STATUS
+		err := action.Parameters.AssignProperties_To_CacheExpirationActionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_CacheExpirationActionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCacheExpirationAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleCacheExpirationAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleCacheKeyQueryStringAction
 type DeliveryRuleCacheKeyQueryStringAction struct {
 	Name        *string                              `json:"name,omitempty"`
 	Parameters  *CacheKeyQueryStringActionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag               `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleCacheKeyQueryStringAction populates our DeliveryRuleCacheKeyQueryStringAction from the provided source DeliveryRuleCacheKeyQueryStringAction
+func (action *DeliveryRuleCacheKeyQueryStringAction) AssignProperties_From_DeliveryRuleCacheKeyQueryStringAction(source *v20230501s.DeliveryRuleCacheKeyQueryStringAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter CacheKeyQueryStringActionParameters
+		err := parameter.AssignProperties_From_CacheKeyQueryStringActionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_CacheKeyQueryStringActionParameters() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCacheKeyQueryStringAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleCacheKeyQueryStringAction); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleCacheKeyQueryStringAction populates the provided destination DeliveryRuleCacheKeyQueryStringAction from our DeliveryRuleCacheKeyQueryStringAction
+func (action *DeliveryRuleCacheKeyQueryStringAction) AssignProperties_To_DeliveryRuleCacheKeyQueryStringAction(destination *v20230501s.DeliveryRuleCacheKeyQueryStringAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.CacheKeyQueryStringActionParameters
+		err := action.Parameters.AssignProperties_To_CacheKeyQueryStringActionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_CacheKeyQueryStringActionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCacheKeyQueryStringAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleCacheKeyQueryStringAction); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleCacheKeyQueryStringAction_STATUS
@@ -594,11 +4658,171 @@ type DeliveryRuleCacheKeyQueryStringAction_STATUS struct {
 	PropertyBag genruntime.PropertyBag                      `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleCacheKeyQueryStringAction_STATUS populates our DeliveryRuleCacheKeyQueryStringAction_STATUS from the provided source DeliveryRuleCacheKeyQueryStringAction_STATUS
+func (action *DeliveryRuleCacheKeyQueryStringAction_STATUS) AssignProperties_From_DeliveryRuleCacheKeyQueryStringAction_STATUS(source *v20230501s.DeliveryRuleCacheKeyQueryStringAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter CacheKeyQueryStringActionParameters_STATUS
+		err := parameter.AssignProperties_From_CacheKeyQueryStringActionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_CacheKeyQueryStringActionParameters_STATUS() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCacheKeyQueryStringAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleCacheKeyQueryStringAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleCacheKeyQueryStringAction_STATUS populates the provided destination DeliveryRuleCacheKeyQueryStringAction_STATUS from our DeliveryRuleCacheKeyQueryStringAction_STATUS
+func (action *DeliveryRuleCacheKeyQueryStringAction_STATUS) AssignProperties_To_DeliveryRuleCacheKeyQueryStringAction_STATUS(destination *v20230501s.DeliveryRuleCacheKeyQueryStringAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.CacheKeyQueryStringActionParameters_STATUS
+		err := action.Parameters.AssignProperties_To_CacheKeyQueryStringActionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_CacheKeyQueryStringActionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCacheKeyQueryStringAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleCacheKeyQueryStringAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleClientPortCondition
 type DeliveryRuleClientPortCondition struct {
 	Name        *string                             `json:"name,omitempty"`
 	Parameters  *ClientPortMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag              `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleClientPortCondition populates our DeliveryRuleClientPortCondition from the provided source DeliveryRuleClientPortCondition
+func (condition *DeliveryRuleClientPortCondition) AssignProperties_From_DeliveryRuleClientPortCondition(source *v20230501s.DeliveryRuleClientPortCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter ClientPortMatchConditionParameters
+		err := parameter.AssignProperties_From_ClientPortMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_ClientPortMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleClientPortCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleClientPortCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleClientPortCondition populates the provided destination DeliveryRuleClientPortCondition from our DeliveryRuleClientPortCondition
+func (condition *DeliveryRuleClientPortCondition) AssignProperties_To_DeliveryRuleClientPortCondition(destination *v20230501s.DeliveryRuleClientPortCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.ClientPortMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_ClientPortMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_ClientPortMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleClientPortCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleClientPortCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleClientPortCondition_STATUS
@@ -608,11 +4832,171 @@ type DeliveryRuleClientPortCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                     `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleClientPortCondition_STATUS populates our DeliveryRuleClientPortCondition_STATUS from the provided source DeliveryRuleClientPortCondition_STATUS
+func (condition *DeliveryRuleClientPortCondition_STATUS) AssignProperties_From_DeliveryRuleClientPortCondition_STATUS(source *v20230501s.DeliveryRuleClientPortCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter ClientPortMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_ClientPortMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_ClientPortMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleClientPortCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleClientPortCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleClientPortCondition_STATUS populates the provided destination DeliveryRuleClientPortCondition_STATUS from our DeliveryRuleClientPortCondition_STATUS
+func (condition *DeliveryRuleClientPortCondition_STATUS) AssignProperties_To_DeliveryRuleClientPortCondition_STATUS(destination *v20230501s.DeliveryRuleClientPortCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.ClientPortMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_ClientPortMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_ClientPortMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleClientPortCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleClientPortCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleCookiesCondition
 type DeliveryRuleCookiesCondition struct {
 	Name        *string                          `json:"name,omitempty"`
 	Parameters  *CookiesMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag           `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleCookiesCondition populates our DeliveryRuleCookiesCondition from the provided source DeliveryRuleCookiesCondition
+func (condition *DeliveryRuleCookiesCondition) AssignProperties_From_DeliveryRuleCookiesCondition(source *v20230501s.DeliveryRuleCookiesCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter CookiesMatchConditionParameters
+		err := parameter.AssignProperties_From_CookiesMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_CookiesMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCookiesCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleCookiesCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleCookiesCondition populates the provided destination DeliveryRuleCookiesCondition from our DeliveryRuleCookiesCondition
+func (condition *DeliveryRuleCookiesCondition) AssignProperties_To_DeliveryRuleCookiesCondition(destination *v20230501s.DeliveryRuleCookiesCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.CookiesMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_CookiesMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_CookiesMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCookiesCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleCookiesCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleCookiesCondition_STATUS
@@ -622,11 +5006,171 @@ type DeliveryRuleCookiesCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                  `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleCookiesCondition_STATUS populates our DeliveryRuleCookiesCondition_STATUS from the provided source DeliveryRuleCookiesCondition_STATUS
+func (condition *DeliveryRuleCookiesCondition_STATUS) AssignProperties_From_DeliveryRuleCookiesCondition_STATUS(source *v20230501s.DeliveryRuleCookiesCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter CookiesMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_CookiesMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_CookiesMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCookiesCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleCookiesCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleCookiesCondition_STATUS populates the provided destination DeliveryRuleCookiesCondition_STATUS from our DeliveryRuleCookiesCondition_STATUS
+func (condition *DeliveryRuleCookiesCondition_STATUS) AssignProperties_To_DeliveryRuleCookiesCondition_STATUS(destination *v20230501s.DeliveryRuleCookiesCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.CookiesMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_CookiesMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_CookiesMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleCookiesCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleCookiesCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleHostNameCondition
 type DeliveryRuleHostNameCondition struct {
 	Name        *string                           `json:"name,omitempty"`
 	Parameters  *HostNameMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag            `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleHostNameCondition populates our DeliveryRuleHostNameCondition from the provided source DeliveryRuleHostNameCondition
+func (condition *DeliveryRuleHostNameCondition) AssignProperties_From_DeliveryRuleHostNameCondition(source *v20230501s.DeliveryRuleHostNameCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter HostNameMatchConditionParameters
+		err := parameter.AssignProperties_From_HostNameMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_HostNameMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleHostNameCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleHostNameCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleHostNameCondition populates the provided destination DeliveryRuleHostNameCondition from our DeliveryRuleHostNameCondition
+func (condition *DeliveryRuleHostNameCondition) AssignProperties_To_DeliveryRuleHostNameCondition(destination *v20230501s.DeliveryRuleHostNameCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.HostNameMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_HostNameMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_HostNameMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleHostNameCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleHostNameCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleHostNameCondition_STATUS
@@ -636,11 +5180,171 @@ type DeliveryRuleHostNameCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                   `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleHostNameCondition_STATUS populates our DeliveryRuleHostNameCondition_STATUS from the provided source DeliveryRuleHostNameCondition_STATUS
+func (condition *DeliveryRuleHostNameCondition_STATUS) AssignProperties_From_DeliveryRuleHostNameCondition_STATUS(source *v20230501s.DeliveryRuleHostNameCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter HostNameMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_HostNameMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_HostNameMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleHostNameCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleHostNameCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleHostNameCondition_STATUS populates the provided destination DeliveryRuleHostNameCondition_STATUS from our DeliveryRuleHostNameCondition_STATUS
+func (condition *DeliveryRuleHostNameCondition_STATUS) AssignProperties_To_DeliveryRuleHostNameCondition_STATUS(destination *v20230501s.DeliveryRuleHostNameCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.HostNameMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_HostNameMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_HostNameMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleHostNameCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleHostNameCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleHttpVersionCondition
 type DeliveryRuleHttpVersionCondition struct {
 	Name        *string                              `json:"name,omitempty"`
 	Parameters  *HttpVersionMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag               `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleHttpVersionCondition populates our DeliveryRuleHttpVersionCondition from the provided source DeliveryRuleHttpVersionCondition
+func (condition *DeliveryRuleHttpVersionCondition) AssignProperties_From_DeliveryRuleHttpVersionCondition(source *v20230501s.DeliveryRuleHttpVersionCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter HttpVersionMatchConditionParameters
+		err := parameter.AssignProperties_From_HttpVersionMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_HttpVersionMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleHttpVersionCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleHttpVersionCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleHttpVersionCondition populates the provided destination DeliveryRuleHttpVersionCondition from our DeliveryRuleHttpVersionCondition
+func (condition *DeliveryRuleHttpVersionCondition) AssignProperties_To_DeliveryRuleHttpVersionCondition(destination *v20230501s.DeliveryRuleHttpVersionCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.HttpVersionMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_HttpVersionMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_HttpVersionMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleHttpVersionCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleHttpVersionCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleHttpVersionCondition_STATUS
@@ -650,11 +5354,171 @@ type DeliveryRuleHttpVersionCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                      `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleHttpVersionCondition_STATUS populates our DeliveryRuleHttpVersionCondition_STATUS from the provided source DeliveryRuleHttpVersionCondition_STATUS
+func (condition *DeliveryRuleHttpVersionCondition_STATUS) AssignProperties_From_DeliveryRuleHttpVersionCondition_STATUS(source *v20230501s.DeliveryRuleHttpVersionCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter HttpVersionMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_HttpVersionMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_HttpVersionMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleHttpVersionCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleHttpVersionCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleHttpVersionCondition_STATUS populates the provided destination DeliveryRuleHttpVersionCondition_STATUS from our DeliveryRuleHttpVersionCondition_STATUS
+func (condition *DeliveryRuleHttpVersionCondition_STATUS) AssignProperties_To_DeliveryRuleHttpVersionCondition_STATUS(destination *v20230501s.DeliveryRuleHttpVersionCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.HttpVersionMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_HttpVersionMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_HttpVersionMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleHttpVersionCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleHttpVersionCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleIsDeviceCondition
 type DeliveryRuleIsDeviceCondition struct {
 	Name        *string                           `json:"name,omitempty"`
 	Parameters  *IsDeviceMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag            `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleIsDeviceCondition populates our DeliveryRuleIsDeviceCondition from the provided source DeliveryRuleIsDeviceCondition
+func (condition *DeliveryRuleIsDeviceCondition) AssignProperties_From_DeliveryRuleIsDeviceCondition(source *v20230501s.DeliveryRuleIsDeviceCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter IsDeviceMatchConditionParameters
+		err := parameter.AssignProperties_From_IsDeviceMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_IsDeviceMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleIsDeviceCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleIsDeviceCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleIsDeviceCondition populates the provided destination DeliveryRuleIsDeviceCondition from our DeliveryRuleIsDeviceCondition
+func (condition *DeliveryRuleIsDeviceCondition) AssignProperties_To_DeliveryRuleIsDeviceCondition(destination *v20230501s.DeliveryRuleIsDeviceCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.IsDeviceMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_IsDeviceMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_IsDeviceMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleIsDeviceCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleIsDeviceCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleIsDeviceCondition_STATUS
@@ -664,11 +5528,171 @@ type DeliveryRuleIsDeviceCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                   `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleIsDeviceCondition_STATUS populates our DeliveryRuleIsDeviceCondition_STATUS from the provided source DeliveryRuleIsDeviceCondition_STATUS
+func (condition *DeliveryRuleIsDeviceCondition_STATUS) AssignProperties_From_DeliveryRuleIsDeviceCondition_STATUS(source *v20230501s.DeliveryRuleIsDeviceCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter IsDeviceMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_IsDeviceMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_IsDeviceMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleIsDeviceCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleIsDeviceCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleIsDeviceCondition_STATUS populates the provided destination DeliveryRuleIsDeviceCondition_STATUS from our DeliveryRuleIsDeviceCondition_STATUS
+func (condition *DeliveryRuleIsDeviceCondition_STATUS) AssignProperties_To_DeliveryRuleIsDeviceCondition_STATUS(destination *v20230501s.DeliveryRuleIsDeviceCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.IsDeviceMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_IsDeviceMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_IsDeviceMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleIsDeviceCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleIsDeviceCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRulePostArgsCondition
 type DeliveryRulePostArgsCondition struct {
 	Name        *string                           `json:"name,omitempty"`
 	Parameters  *PostArgsMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag            `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRulePostArgsCondition populates our DeliveryRulePostArgsCondition from the provided source DeliveryRulePostArgsCondition
+func (condition *DeliveryRulePostArgsCondition) AssignProperties_From_DeliveryRulePostArgsCondition(source *v20230501s.DeliveryRulePostArgsCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter PostArgsMatchConditionParameters
+		err := parameter.AssignProperties_From_PostArgsMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_PostArgsMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRulePostArgsCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRulePostArgsCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRulePostArgsCondition populates the provided destination DeliveryRulePostArgsCondition from our DeliveryRulePostArgsCondition
+func (condition *DeliveryRulePostArgsCondition) AssignProperties_To_DeliveryRulePostArgsCondition(destination *v20230501s.DeliveryRulePostArgsCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.PostArgsMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_PostArgsMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_PostArgsMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRulePostArgsCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRulePostArgsCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRulePostArgsCondition_STATUS
@@ -678,11 +5702,171 @@ type DeliveryRulePostArgsCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                   `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRulePostArgsCondition_STATUS populates our DeliveryRulePostArgsCondition_STATUS from the provided source DeliveryRulePostArgsCondition_STATUS
+func (condition *DeliveryRulePostArgsCondition_STATUS) AssignProperties_From_DeliveryRulePostArgsCondition_STATUS(source *v20230501s.DeliveryRulePostArgsCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter PostArgsMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_PostArgsMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_PostArgsMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRulePostArgsCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRulePostArgsCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRulePostArgsCondition_STATUS populates the provided destination DeliveryRulePostArgsCondition_STATUS from our DeliveryRulePostArgsCondition_STATUS
+func (condition *DeliveryRulePostArgsCondition_STATUS) AssignProperties_To_DeliveryRulePostArgsCondition_STATUS(destination *v20230501s.DeliveryRulePostArgsCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.PostArgsMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_PostArgsMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_PostArgsMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRulePostArgsCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRulePostArgsCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleQueryStringCondition
 type DeliveryRuleQueryStringCondition struct {
 	Name        *string                              `json:"name,omitempty"`
 	Parameters  *QueryStringMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag               `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleQueryStringCondition populates our DeliveryRuleQueryStringCondition from the provided source DeliveryRuleQueryStringCondition
+func (condition *DeliveryRuleQueryStringCondition) AssignProperties_From_DeliveryRuleQueryStringCondition(source *v20230501s.DeliveryRuleQueryStringCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter QueryStringMatchConditionParameters
+		err := parameter.AssignProperties_From_QueryStringMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_QueryStringMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleQueryStringCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleQueryStringCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleQueryStringCondition populates the provided destination DeliveryRuleQueryStringCondition from our DeliveryRuleQueryStringCondition
+func (condition *DeliveryRuleQueryStringCondition) AssignProperties_To_DeliveryRuleQueryStringCondition(destination *v20230501s.DeliveryRuleQueryStringCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.QueryStringMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_QueryStringMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_QueryStringMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleQueryStringCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleQueryStringCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleQueryStringCondition_STATUS
@@ -692,11 +5876,171 @@ type DeliveryRuleQueryStringCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                      `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleQueryStringCondition_STATUS populates our DeliveryRuleQueryStringCondition_STATUS from the provided source DeliveryRuleQueryStringCondition_STATUS
+func (condition *DeliveryRuleQueryStringCondition_STATUS) AssignProperties_From_DeliveryRuleQueryStringCondition_STATUS(source *v20230501s.DeliveryRuleQueryStringCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter QueryStringMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_QueryStringMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_QueryStringMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleQueryStringCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleQueryStringCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleQueryStringCondition_STATUS populates the provided destination DeliveryRuleQueryStringCondition_STATUS from our DeliveryRuleQueryStringCondition_STATUS
+func (condition *DeliveryRuleQueryStringCondition_STATUS) AssignProperties_To_DeliveryRuleQueryStringCondition_STATUS(destination *v20230501s.DeliveryRuleQueryStringCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.QueryStringMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_QueryStringMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_QueryStringMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleQueryStringCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleQueryStringCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleRemoteAddressCondition
 type DeliveryRuleRemoteAddressCondition struct {
 	Name        *string                                `json:"name,omitempty"`
 	Parameters  *RemoteAddressMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag                 `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleRemoteAddressCondition populates our DeliveryRuleRemoteAddressCondition from the provided source DeliveryRuleRemoteAddressCondition
+func (condition *DeliveryRuleRemoteAddressCondition) AssignProperties_From_DeliveryRuleRemoteAddressCondition(source *v20230501s.DeliveryRuleRemoteAddressCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter RemoteAddressMatchConditionParameters
+		err := parameter.AssignProperties_From_RemoteAddressMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_RemoteAddressMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRemoteAddressCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRemoteAddressCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRemoteAddressCondition populates the provided destination DeliveryRuleRemoteAddressCondition from our DeliveryRuleRemoteAddressCondition
+func (condition *DeliveryRuleRemoteAddressCondition) AssignProperties_To_DeliveryRuleRemoteAddressCondition(destination *v20230501s.DeliveryRuleRemoteAddressCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.RemoteAddressMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_RemoteAddressMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_RemoteAddressMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRemoteAddressCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRemoteAddressCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleRemoteAddressCondition_STATUS
@@ -706,11 +6050,171 @@ type DeliveryRuleRemoteAddressCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                        `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleRemoteAddressCondition_STATUS populates our DeliveryRuleRemoteAddressCondition_STATUS from the provided source DeliveryRuleRemoteAddressCondition_STATUS
+func (condition *DeliveryRuleRemoteAddressCondition_STATUS) AssignProperties_From_DeliveryRuleRemoteAddressCondition_STATUS(source *v20230501s.DeliveryRuleRemoteAddressCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter RemoteAddressMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_RemoteAddressMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_RemoteAddressMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRemoteAddressCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRemoteAddressCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRemoteAddressCondition_STATUS populates the provided destination DeliveryRuleRemoteAddressCondition_STATUS from our DeliveryRuleRemoteAddressCondition_STATUS
+func (condition *DeliveryRuleRemoteAddressCondition_STATUS) AssignProperties_To_DeliveryRuleRemoteAddressCondition_STATUS(destination *v20230501s.DeliveryRuleRemoteAddressCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.RemoteAddressMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_RemoteAddressMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_RemoteAddressMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRemoteAddressCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRemoteAddressCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleRequestBodyCondition
 type DeliveryRuleRequestBodyCondition struct {
 	Name        *string                              `json:"name,omitempty"`
 	Parameters  *RequestBodyMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag               `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleRequestBodyCondition populates our DeliveryRuleRequestBodyCondition from the provided source DeliveryRuleRequestBodyCondition
+func (condition *DeliveryRuleRequestBodyCondition) AssignProperties_From_DeliveryRuleRequestBodyCondition(source *v20230501s.DeliveryRuleRequestBodyCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter RequestBodyMatchConditionParameters
+		err := parameter.AssignProperties_From_RequestBodyMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_RequestBodyMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestBodyCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestBodyCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRequestBodyCondition populates the provided destination DeliveryRuleRequestBodyCondition from our DeliveryRuleRequestBodyCondition
+func (condition *DeliveryRuleRequestBodyCondition) AssignProperties_To_DeliveryRuleRequestBodyCondition(destination *v20230501s.DeliveryRuleRequestBodyCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.RequestBodyMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_RequestBodyMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_RequestBodyMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestBodyCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestBodyCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleRequestBodyCondition_STATUS
@@ -720,11 +6224,171 @@ type DeliveryRuleRequestBodyCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                      `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleRequestBodyCondition_STATUS populates our DeliveryRuleRequestBodyCondition_STATUS from the provided source DeliveryRuleRequestBodyCondition_STATUS
+func (condition *DeliveryRuleRequestBodyCondition_STATUS) AssignProperties_From_DeliveryRuleRequestBodyCondition_STATUS(source *v20230501s.DeliveryRuleRequestBodyCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter RequestBodyMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_RequestBodyMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_RequestBodyMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestBodyCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestBodyCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRequestBodyCondition_STATUS populates the provided destination DeliveryRuleRequestBodyCondition_STATUS from our DeliveryRuleRequestBodyCondition_STATUS
+func (condition *DeliveryRuleRequestBodyCondition_STATUS) AssignProperties_To_DeliveryRuleRequestBodyCondition_STATUS(destination *v20230501s.DeliveryRuleRequestBodyCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.RequestBodyMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_RequestBodyMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_RequestBodyMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestBodyCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestBodyCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleRequestHeaderAction
 type DeliveryRuleRequestHeaderAction struct {
 	Name        *string                 `json:"name,omitempty"`
 	Parameters  *HeaderActionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag  `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleRequestHeaderAction populates our DeliveryRuleRequestHeaderAction from the provided source DeliveryRuleRequestHeaderAction
+func (action *DeliveryRuleRequestHeaderAction) AssignProperties_From_DeliveryRuleRequestHeaderAction(source *v20230501s.DeliveryRuleRequestHeaderAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter HeaderActionParameters
+		err := parameter.AssignProperties_From_HeaderActionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_HeaderActionParameters() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestHeaderAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleRequestHeaderAction); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRequestHeaderAction populates the provided destination DeliveryRuleRequestHeaderAction from our DeliveryRuleRequestHeaderAction
+func (action *DeliveryRuleRequestHeaderAction) AssignProperties_To_DeliveryRuleRequestHeaderAction(destination *v20230501s.DeliveryRuleRequestHeaderAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.HeaderActionParameters
+		err := action.Parameters.AssignProperties_To_HeaderActionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_HeaderActionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestHeaderAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleRequestHeaderAction); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleRequestHeaderAction_STATUS
@@ -734,11 +6398,171 @@ type DeliveryRuleRequestHeaderAction_STATUS struct {
 	PropertyBag genruntime.PropertyBag         `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleRequestHeaderAction_STATUS populates our DeliveryRuleRequestHeaderAction_STATUS from the provided source DeliveryRuleRequestHeaderAction_STATUS
+func (action *DeliveryRuleRequestHeaderAction_STATUS) AssignProperties_From_DeliveryRuleRequestHeaderAction_STATUS(source *v20230501s.DeliveryRuleRequestHeaderAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter HeaderActionParameters_STATUS
+		err := parameter.AssignProperties_From_HeaderActionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_HeaderActionParameters_STATUS() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestHeaderAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleRequestHeaderAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRequestHeaderAction_STATUS populates the provided destination DeliveryRuleRequestHeaderAction_STATUS from our DeliveryRuleRequestHeaderAction_STATUS
+func (action *DeliveryRuleRequestHeaderAction_STATUS) AssignProperties_To_DeliveryRuleRequestHeaderAction_STATUS(destination *v20230501s.DeliveryRuleRequestHeaderAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.HeaderActionParameters_STATUS
+		err := action.Parameters.AssignProperties_To_HeaderActionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_HeaderActionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestHeaderAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleRequestHeaderAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleRequestHeaderCondition
 type DeliveryRuleRequestHeaderCondition struct {
 	Name        *string                                `json:"name,omitempty"`
 	Parameters  *RequestHeaderMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag                 `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleRequestHeaderCondition populates our DeliveryRuleRequestHeaderCondition from the provided source DeliveryRuleRequestHeaderCondition
+func (condition *DeliveryRuleRequestHeaderCondition) AssignProperties_From_DeliveryRuleRequestHeaderCondition(source *v20230501s.DeliveryRuleRequestHeaderCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter RequestHeaderMatchConditionParameters
+		err := parameter.AssignProperties_From_RequestHeaderMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_RequestHeaderMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestHeaderCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestHeaderCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRequestHeaderCondition populates the provided destination DeliveryRuleRequestHeaderCondition from our DeliveryRuleRequestHeaderCondition
+func (condition *DeliveryRuleRequestHeaderCondition) AssignProperties_To_DeliveryRuleRequestHeaderCondition(destination *v20230501s.DeliveryRuleRequestHeaderCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.RequestHeaderMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_RequestHeaderMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_RequestHeaderMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestHeaderCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestHeaderCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleRequestHeaderCondition_STATUS
@@ -748,11 +6572,171 @@ type DeliveryRuleRequestHeaderCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                        `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleRequestHeaderCondition_STATUS populates our DeliveryRuleRequestHeaderCondition_STATUS from the provided source DeliveryRuleRequestHeaderCondition_STATUS
+func (condition *DeliveryRuleRequestHeaderCondition_STATUS) AssignProperties_From_DeliveryRuleRequestHeaderCondition_STATUS(source *v20230501s.DeliveryRuleRequestHeaderCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter RequestHeaderMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_RequestHeaderMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_RequestHeaderMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestHeaderCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestHeaderCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRequestHeaderCondition_STATUS populates the provided destination DeliveryRuleRequestHeaderCondition_STATUS from our DeliveryRuleRequestHeaderCondition_STATUS
+func (condition *DeliveryRuleRequestHeaderCondition_STATUS) AssignProperties_To_DeliveryRuleRequestHeaderCondition_STATUS(destination *v20230501s.DeliveryRuleRequestHeaderCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.RequestHeaderMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_RequestHeaderMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_RequestHeaderMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestHeaderCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestHeaderCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleRequestMethodCondition
 type DeliveryRuleRequestMethodCondition struct {
 	Name        *string                                `json:"name,omitempty"`
 	Parameters  *RequestMethodMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag                 `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleRequestMethodCondition populates our DeliveryRuleRequestMethodCondition from the provided source DeliveryRuleRequestMethodCondition
+func (condition *DeliveryRuleRequestMethodCondition) AssignProperties_From_DeliveryRuleRequestMethodCondition(source *v20230501s.DeliveryRuleRequestMethodCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter RequestMethodMatchConditionParameters
+		err := parameter.AssignProperties_From_RequestMethodMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_RequestMethodMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestMethodCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestMethodCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRequestMethodCondition populates the provided destination DeliveryRuleRequestMethodCondition from our DeliveryRuleRequestMethodCondition
+func (condition *DeliveryRuleRequestMethodCondition) AssignProperties_To_DeliveryRuleRequestMethodCondition(destination *v20230501s.DeliveryRuleRequestMethodCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.RequestMethodMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_RequestMethodMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_RequestMethodMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestMethodCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestMethodCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleRequestMethodCondition_STATUS
@@ -762,11 +6746,171 @@ type DeliveryRuleRequestMethodCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                        `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleRequestMethodCondition_STATUS populates our DeliveryRuleRequestMethodCondition_STATUS from the provided source DeliveryRuleRequestMethodCondition_STATUS
+func (condition *DeliveryRuleRequestMethodCondition_STATUS) AssignProperties_From_DeliveryRuleRequestMethodCondition_STATUS(source *v20230501s.DeliveryRuleRequestMethodCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter RequestMethodMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_RequestMethodMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_RequestMethodMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestMethodCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestMethodCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRequestMethodCondition_STATUS populates the provided destination DeliveryRuleRequestMethodCondition_STATUS from our DeliveryRuleRequestMethodCondition_STATUS
+func (condition *DeliveryRuleRequestMethodCondition_STATUS) AssignProperties_To_DeliveryRuleRequestMethodCondition_STATUS(destination *v20230501s.DeliveryRuleRequestMethodCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.RequestMethodMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_RequestMethodMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_RequestMethodMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestMethodCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestMethodCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleRequestSchemeCondition
 type DeliveryRuleRequestSchemeCondition struct {
 	Name        *string                                `json:"name,omitempty"`
 	Parameters  *RequestSchemeMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag                 `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleRequestSchemeCondition populates our DeliveryRuleRequestSchemeCondition from the provided source DeliveryRuleRequestSchemeCondition
+func (condition *DeliveryRuleRequestSchemeCondition) AssignProperties_From_DeliveryRuleRequestSchemeCondition(source *v20230501s.DeliveryRuleRequestSchemeCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter RequestSchemeMatchConditionParameters
+		err := parameter.AssignProperties_From_RequestSchemeMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_RequestSchemeMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestSchemeCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestSchemeCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRequestSchemeCondition populates the provided destination DeliveryRuleRequestSchemeCondition from our DeliveryRuleRequestSchemeCondition
+func (condition *DeliveryRuleRequestSchemeCondition) AssignProperties_To_DeliveryRuleRequestSchemeCondition(destination *v20230501s.DeliveryRuleRequestSchemeCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.RequestSchemeMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_RequestSchemeMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_RequestSchemeMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestSchemeCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestSchemeCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleRequestSchemeCondition_STATUS
@@ -776,11 +6920,171 @@ type DeliveryRuleRequestSchemeCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                        `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleRequestSchemeCondition_STATUS populates our DeliveryRuleRequestSchemeCondition_STATUS from the provided source DeliveryRuleRequestSchemeCondition_STATUS
+func (condition *DeliveryRuleRequestSchemeCondition_STATUS) AssignProperties_From_DeliveryRuleRequestSchemeCondition_STATUS(source *v20230501s.DeliveryRuleRequestSchemeCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter RequestSchemeMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_RequestSchemeMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_RequestSchemeMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestSchemeCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestSchemeCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRequestSchemeCondition_STATUS populates the provided destination DeliveryRuleRequestSchemeCondition_STATUS from our DeliveryRuleRequestSchemeCondition_STATUS
+func (condition *DeliveryRuleRequestSchemeCondition_STATUS) AssignProperties_To_DeliveryRuleRequestSchemeCondition_STATUS(destination *v20230501s.DeliveryRuleRequestSchemeCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.RequestSchemeMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_RequestSchemeMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_RequestSchemeMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestSchemeCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestSchemeCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleRequestUriCondition
 type DeliveryRuleRequestUriCondition struct {
 	Name        *string                             `json:"name,omitempty"`
 	Parameters  *RequestUriMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag              `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleRequestUriCondition populates our DeliveryRuleRequestUriCondition from the provided source DeliveryRuleRequestUriCondition
+func (condition *DeliveryRuleRequestUriCondition) AssignProperties_From_DeliveryRuleRequestUriCondition(source *v20230501s.DeliveryRuleRequestUriCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter RequestUriMatchConditionParameters
+		err := parameter.AssignProperties_From_RequestUriMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_RequestUriMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestUriCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestUriCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRequestUriCondition populates the provided destination DeliveryRuleRequestUriCondition from our DeliveryRuleRequestUriCondition
+func (condition *DeliveryRuleRequestUriCondition) AssignProperties_To_DeliveryRuleRequestUriCondition(destination *v20230501s.DeliveryRuleRequestUriCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.RequestUriMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_RequestUriMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_RequestUriMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestUriCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestUriCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleRequestUriCondition_STATUS
@@ -790,11 +7094,171 @@ type DeliveryRuleRequestUriCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                     `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleRequestUriCondition_STATUS populates our DeliveryRuleRequestUriCondition_STATUS from the provided source DeliveryRuleRequestUriCondition_STATUS
+func (condition *DeliveryRuleRequestUriCondition_STATUS) AssignProperties_From_DeliveryRuleRequestUriCondition_STATUS(source *v20230501s.DeliveryRuleRequestUriCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter RequestUriMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_RequestUriMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_RequestUriMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestUriCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestUriCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRequestUriCondition_STATUS populates the provided destination DeliveryRuleRequestUriCondition_STATUS from our DeliveryRuleRequestUriCondition_STATUS
+func (condition *DeliveryRuleRequestUriCondition_STATUS) AssignProperties_To_DeliveryRuleRequestUriCondition_STATUS(destination *v20230501s.DeliveryRuleRequestUriCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.RequestUriMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_RequestUriMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_RequestUriMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRequestUriCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleRequestUriCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleResponseHeaderAction
 type DeliveryRuleResponseHeaderAction struct {
 	Name        *string                 `json:"name,omitempty"`
 	Parameters  *HeaderActionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag  `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleResponseHeaderAction populates our DeliveryRuleResponseHeaderAction from the provided source DeliveryRuleResponseHeaderAction
+func (action *DeliveryRuleResponseHeaderAction) AssignProperties_From_DeliveryRuleResponseHeaderAction(source *v20230501s.DeliveryRuleResponseHeaderAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter HeaderActionParameters
+		err := parameter.AssignProperties_From_HeaderActionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_HeaderActionParameters() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleResponseHeaderAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleResponseHeaderAction); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleResponseHeaderAction populates the provided destination DeliveryRuleResponseHeaderAction from our DeliveryRuleResponseHeaderAction
+func (action *DeliveryRuleResponseHeaderAction) AssignProperties_To_DeliveryRuleResponseHeaderAction(destination *v20230501s.DeliveryRuleResponseHeaderAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.HeaderActionParameters
+		err := action.Parameters.AssignProperties_To_HeaderActionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_HeaderActionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleResponseHeaderAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleResponseHeaderAction); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleResponseHeaderAction_STATUS
@@ -804,11 +7268,171 @@ type DeliveryRuleResponseHeaderAction_STATUS struct {
 	PropertyBag genruntime.PropertyBag         `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleResponseHeaderAction_STATUS populates our DeliveryRuleResponseHeaderAction_STATUS from the provided source DeliveryRuleResponseHeaderAction_STATUS
+func (action *DeliveryRuleResponseHeaderAction_STATUS) AssignProperties_From_DeliveryRuleResponseHeaderAction_STATUS(source *v20230501s.DeliveryRuleResponseHeaderAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter HeaderActionParameters_STATUS
+		err := parameter.AssignProperties_From_HeaderActionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_HeaderActionParameters_STATUS() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleResponseHeaderAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleResponseHeaderAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleResponseHeaderAction_STATUS populates the provided destination DeliveryRuleResponseHeaderAction_STATUS from our DeliveryRuleResponseHeaderAction_STATUS
+func (action *DeliveryRuleResponseHeaderAction_STATUS) AssignProperties_To_DeliveryRuleResponseHeaderAction_STATUS(destination *v20230501s.DeliveryRuleResponseHeaderAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.HeaderActionParameters_STATUS
+		err := action.Parameters.AssignProperties_To_HeaderActionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_HeaderActionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleResponseHeaderAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleResponseHeaderAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleRouteConfigurationOverrideAction
 type DeliveryRuleRouteConfigurationOverrideAction struct {
 	Name        *string                                     `json:"name,omitempty"`
 	Parameters  *RouteConfigurationOverrideActionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag                      `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleRouteConfigurationOverrideAction populates our DeliveryRuleRouteConfigurationOverrideAction from the provided source DeliveryRuleRouteConfigurationOverrideAction
+func (action *DeliveryRuleRouteConfigurationOverrideAction) AssignProperties_From_DeliveryRuleRouteConfigurationOverrideAction(source *v20230501s.DeliveryRuleRouteConfigurationOverrideAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter RouteConfigurationOverrideActionParameters
+		err := parameter.AssignProperties_From_RouteConfigurationOverrideActionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_RouteConfigurationOverrideActionParameters() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRouteConfigurationOverrideAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleRouteConfigurationOverrideAction); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRouteConfigurationOverrideAction populates the provided destination DeliveryRuleRouteConfigurationOverrideAction from our DeliveryRuleRouteConfigurationOverrideAction
+func (action *DeliveryRuleRouteConfigurationOverrideAction) AssignProperties_To_DeliveryRuleRouteConfigurationOverrideAction(destination *v20230501s.DeliveryRuleRouteConfigurationOverrideAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.RouteConfigurationOverrideActionParameters
+		err := action.Parameters.AssignProperties_To_RouteConfigurationOverrideActionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_RouteConfigurationOverrideActionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRouteConfigurationOverrideAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleRouteConfigurationOverrideAction); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleRouteConfigurationOverrideAction_STATUS
@@ -818,11 +7442,171 @@ type DeliveryRuleRouteConfigurationOverrideAction_STATUS struct {
 	PropertyBag genruntime.PropertyBag                             `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleRouteConfigurationOverrideAction_STATUS populates our DeliveryRuleRouteConfigurationOverrideAction_STATUS from the provided source DeliveryRuleRouteConfigurationOverrideAction_STATUS
+func (action *DeliveryRuleRouteConfigurationOverrideAction_STATUS) AssignProperties_From_DeliveryRuleRouteConfigurationOverrideAction_STATUS(source *v20230501s.DeliveryRuleRouteConfigurationOverrideAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter RouteConfigurationOverrideActionParameters_STATUS
+		err := parameter.AssignProperties_From_RouteConfigurationOverrideActionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_RouteConfigurationOverrideActionParameters_STATUS() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRouteConfigurationOverrideAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleRouteConfigurationOverrideAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleRouteConfigurationOverrideAction_STATUS populates the provided destination DeliveryRuleRouteConfigurationOverrideAction_STATUS from our DeliveryRuleRouteConfigurationOverrideAction_STATUS
+func (action *DeliveryRuleRouteConfigurationOverrideAction_STATUS) AssignProperties_To_DeliveryRuleRouteConfigurationOverrideAction_STATUS(destination *v20230501s.DeliveryRuleRouteConfigurationOverrideAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.RouteConfigurationOverrideActionParameters_STATUS
+		err := action.Parameters.AssignProperties_To_RouteConfigurationOverrideActionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_RouteConfigurationOverrideActionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleRouteConfigurationOverrideAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForDeliveryRuleRouteConfigurationOverrideAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleServerPortCondition
 type DeliveryRuleServerPortCondition struct {
 	Name        *string                             `json:"name,omitempty"`
 	Parameters  *ServerPortMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag              `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleServerPortCondition populates our DeliveryRuleServerPortCondition from the provided source DeliveryRuleServerPortCondition
+func (condition *DeliveryRuleServerPortCondition) AssignProperties_From_DeliveryRuleServerPortCondition(source *v20230501s.DeliveryRuleServerPortCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter ServerPortMatchConditionParameters
+		err := parameter.AssignProperties_From_ServerPortMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_ServerPortMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleServerPortCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleServerPortCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleServerPortCondition populates the provided destination DeliveryRuleServerPortCondition from our DeliveryRuleServerPortCondition
+func (condition *DeliveryRuleServerPortCondition) AssignProperties_To_DeliveryRuleServerPortCondition(destination *v20230501s.DeliveryRuleServerPortCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.ServerPortMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_ServerPortMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_ServerPortMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleServerPortCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleServerPortCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleServerPortCondition_STATUS
@@ -832,11 +7616,171 @@ type DeliveryRuleServerPortCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                     `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleServerPortCondition_STATUS populates our DeliveryRuleServerPortCondition_STATUS from the provided source DeliveryRuleServerPortCondition_STATUS
+func (condition *DeliveryRuleServerPortCondition_STATUS) AssignProperties_From_DeliveryRuleServerPortCondition_STATUS(source *v20230501s.DeliveryRuleServerPortCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter ServerPortMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_ServerPortMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_ServerPortMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleServerPortCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleServerPortCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleServerPortCondition_STATUS populates the provided destination DeliveryRuleServerPortCondition_STATUS from our DeliveryRuleServerPortCondition_STATUS
+func (condition *DeliveryRuleServerPortCondition_STATUS) AssignProperties_To_DeliveryRuleServerPortCondition_STATUS(destination *v20230501s.DeliveryRuleServerPortCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.ServerPortMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_ServerPortMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_ServerPortMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleServerPortCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleServerPortCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleSocketAddrCondition
 type DeliveryRuleSocketAddrCondition struct {
 	Name        *string                             `json:"name,omitempty"`
 	Parameters  *SocketAddrMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag              `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleSocketAddrCondition populates our DeliveryRuleSocketAddrCondition from the provided source DeliveryRuleSocketAddrCondition
+func (condition *DeliveryRuleSocketAddrCondition) AssignProperties_From_DeliveryRuleSocketAddrCondition(source *v20230501s.DeliveryRuleSocketAddrCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter SocketAddrMatchConditionParameters
+		err := parameter.AssignProperties_From_SocketAddrMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_SocketAddrMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleSocketAddrCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleSocketAddrCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleSocketAddrCondition populates the provided destination DeliveryRuleSocketAddrCondition from our DeliveryRuleSocketAddrCondition
+func (condition *DeliveryRuleSocketAddrCondition) AssignProperties_To_DeliveryRuleSocketAddrCondition(destination *v20230501s.DeliveryRuleSocketAddrCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.SocketAddrMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_SocketAddrMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_SocketAddrMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleSocketAddrCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleSocketAddrCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleSocketAddrCondition_STATUS
@@ -846,11 +7790,171 @@ type DeliveryRuleSocketAddrCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                     `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleSocketAddrCondition_STATUS populates our DeliveryRuleSocketAddrCondition_STATUS from the provided source DeliveryRuleSocketAddrCondition_STATUS
+func (condition *DeliveryRuleSocketAddrCondition_STATUS) AssignProperties_From_DeliveryRuleSocketAddrCondition_STATUS(source *v20230501s.DeliveryRuleSocketAddrCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter SocketAddrMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_SocketAddrMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_SocketAddrMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleSocketAddrCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleSocketAddrCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleSocketAddrCondition_STATUS populates the provided destination DeliveryRuleSocketAddrCondition_STATUS from our DeliveryRuleSocketAddrCondition_STATUS
+func (condition *DeliveryRuleSocketAddrCondition_STATUS) AssignProperties_To_DeliveryRuleSocketAddrCondition_STATUS(destination *v20230501s.DeliveryRuleSocketAddrCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.SocketAddrMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_SocketAddrMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_SocketAddrMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleSocketAddrCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleSocketAddrCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleSslProtocolCondition
 type DeliveryRuleSslProtocolCondition struct {
 	Name        *string                              `json:"name,omitempty"`
 	Parameters  *SslProtocolMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag               `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleSslProtocolCondition populates our DeliveryRuleSslProtocolCondition from the provided source DeliveryRuleSslProtocolCondition
+func (condition *DeliveryRuleSslProtocolCondition) AssignProperties_From_DeliveryRuleSslProtocolCondition(source *v20230501s.DeliveryRuleSslProtocolCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter SslProtocolMatchConditionParameters
+		err := parameter.AssignProperties_From_SslProtocolMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_SslProtocolMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleSslProtocolCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleSslProtocolCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleSslProtocolCondition populates the provided destination DeliveryRuleSslProtocolCondition from our DeliveryRuleSslProtocolCondition
+func (condition *DeliveryRuleSslProtocolCondition) AssignProperties_To_DeliveryRuleSslProtocolCondition(destination *v20230501s.DeliveryRuleSslProtocolCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.SslProtocolMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_SslProtocolMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_SslProtocolMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleSslProtocolCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleSslProtocolCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleSslProtocolCondition_STATUS
@@ -860,11 +7964,171 @@ type DeliveryRuleSslProtocolCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                      `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleSslProtocolCondition_STATUS populates our DeliveryRuleSslProtocolCondition_STATUS from the provided source DeliveryRuleSslProtocolCondition_STATUS
+func (condition *DeliveryRuleSslProtocolCondition_STATUS) AssignProperties_From_DeliveryRuleSslProtocolCondition_STATUS(source *v20230501s.DeliveryRuleSslProtocolCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter SslProtocolMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_SslProtocolMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_SslProtocolMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleSslProtocolCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleSslProtocolCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleSslProtocolCondition_STATUS populates the provided destination DeliveryRuleSslProtocolCondition_STATUS from our DeliveryRuleSslProtocolCondition_STATUS
+func (condition *DeliveryRuleSslProtocolCondition_STATUS) AssignProperties_To_DeliveryRuleSslProtocolCondition_STATUS(destination *v20230501s.DeliveryRuleSslProtocolCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.SslProtocolMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_SslProtocolMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_SslProtocolMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleSslProtocolCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleSslProtocolCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleUrlFileExtensionCondition
 type DeliveryRuleUrlFileExtensionCondition struct {
 	Name        *string                                   `json:"name,omitempty"`
 	Parameters  *UrlFileExtensionMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag                    `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleUrlFileExtensionCondition populates our DeliveryRuleUrlFileExtensionCondition from the provided source DeliveryRuleUrlFileExtensionCondition
+func (condition *DeliveryRuleUrlFileExtensionCondition) AssignProperties_From_DeliveryRuleUrlFileExtensionCondition(source *v20230501s.DeliveryRuleUrlFileExtensionCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter UrlFileExtensionMatchConditionParameters
+		err := parameter.AssignProperties_From_UrlFileExtensionMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlFileExtensionMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleUrlFileExtensionCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleUrlFileExtensionCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleUrlFileExtensionCondition populates the provided destination DeliveryRuleUrlFileExtensionCondition from our DeliveryRuleUrlFileExtensionCondition
+func (condition *DeliveryRuleUrlFileExtensionCondition) AssignProperties_To_DeliveryRuleUrlFileExtensionCondition(destination *v20230501s.DeliveryRuleUrlFileExtensionCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.UrlFileExtensionMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_UrlFileExtensionMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlFileExtensionMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleUrlFileExtensionCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleUrlFileExtensionCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleUrlFileExtensionCondition_STATUS
@@ -874,11 +8138,171 @@ type DeliveryRuleUrlFileExtensionCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                           `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleUrlFileExtensionCondition_STATUS populates our DeliveryRuleUrlFileExtensionCondition_STATUS from the provided source DeliveryRuleUrlFileExtensionCondition_STATUS
+func (condition *DeliveryRuleUrlFileExtensionCondition_STATUS) AssignProperties_From_DeliveryRuleUrlFileExtensionCondition_STATUS(source *v20230501s.DeliveryRuleUrlFileExtensionCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter UrlFileExtensionMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_UrlFileExtensionMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlFileExtensionMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleUrlFileExtensionCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleUrlFileExtensionCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleUrlFileExtensionCondition_STATUS populates the provided destination DeliveryRuleUrlFileExtensionCondition_STATUS from our DeliveryRuleUrlFileExtensionCondition_STATUS
+func (condition *DeliveryRuleUrlFileExtensionCondition_STATUS) AssignProperties_To_DeliveryRuleUrlFileExtensionCondition_STATUS(destination *v20230501s.DeliveryRuleUrlFileExtensionCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.UrlFileExtensionMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_UrlFileExtensionMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlFileExtensionMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleUrlFileExtensionCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleUrlFileExtensionCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleUrlFileNameCondition
 type DeliveryRuleUrlFileNameCondition struct {
 	Name        *string                              `json:"name,omitempty"`
 	Parameters  *UrlFileNameMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag               `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleUrlFileNameCondition populates our DeliveryRuleUrlFileNameCondition from the provided source DeliveryRuleUrlFileNameCondition
+func (condition *DeliveryRuleUrlFileNameCondition) AssignProperties_From_DeliveryRuleUrlFileNameCondition(source *v20230501s.DeliveryRuleUrlFileNameCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter UrlFileNameMatchConditionParameters
+		err := parameter.AssignProperties_From_UrlFileNameMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlFileNameMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleUrlFileNameCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleUrlFileNameCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleUrlFileNameCondition populates the provided destination DeliveryRuleUrlFileNameCondition from our DeliveryRuleUrlFileNameCondition
+func (condition *DeliveryRuleUrlFileNameCondition) AssignProperties_To_DeliveryRuleUrlFileNameCondition(destination *v20230501s.DeliveryRuleUrlFileNameCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.UrlFileNameMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_UrlFileNameMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlFileNameMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleUrlFileNameCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleUrlFileNameCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleUrlFileNameCondition_STATUS
@@ -888,11 +8312,171 @@ type DeliveryRuleUrlFileNameCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                      `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleUrlFileNameCondition_STATUS populates our DeliveryRuleUrlFileNameCondition_STATUS from the provided source DeliveryRuleUrlFileNameCondition_STATUS
+func (condition *DeliveryRuleUrlFileNameCondition_STATUS) AssignProperties_From_DeliveryRuleUrlFileNameCondition_STATUS(source *v20230501s.DeliveryRuleUrlFileNameCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter UrlFileNameMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_UrlFileNameMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlFileNameMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleUrlFileNameCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleUrlFileNameCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleUrlFileNameCondition_STATUS populates the provided destination DeliveryRuleUrlFileNameCondition_STATUS from our DeliveryRuleUrlFileNameCondition_STATUS
+func (condition *DeliveryRuleUrlFileNameCondition_STATUS) AssignProperties_To_DeliveryRuleUrlFileNameCondition_STATUS(destination *v20230501s.DeliveryRuleUrlFileNameCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.UrlFileNameMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_UrlFileNameMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlFileNameMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleUrlFileNameCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleUrlFileNameCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.DeliveryRuleUrlPathCondition
 type DeliveryRuleUrlPathCondition struct {
 	Name        *string                          `json:"name,omitempty"`
 	Parameters  *UrlPathMatchConditionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag           `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_DeliveryRuleUrlPathCondition populates our DeliveryRuleUrlPathCondition from the provided source DeliveryRuleUrlPathCondition
+func (condition *DeliveryRuleUrlPathCondition) AssignProperties_From_DeliveryRuleUrlPathCondition(source *v20230501s.DeliveryRuleUrlPathCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter UrlPathMatchConditionParameters
+		err := parameter.AssignProperties_From_UrlPathMatchConditionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlPathMatchConditionParameters() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleUrlPathCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleUrlPathCondition); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleUrlPathCondition populates the provided destination DeliveryRuleUrlPathCondition from our DeliveryRuleUrlPathCondition
+func (condition *DeliveryRuleUrlPathCondition) AssignProperties_To_DeliveryRuleUrlPathCondition(destination *v20230501s.DeliveryRuleUrlPathCondition) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.UrlPathMatchConditionParameters
+		err := condition.Parameters.AssignProperties_To_UrlPathMatchConditionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlPathMatchConditionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleUrlPathCondition interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleUrlPathCondition); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.DeliveryRuleUrlPathCondition_STATUS
@@ -902,11 +8486,171 @@ type DeliveryRuleUrlPathCondition_STATUS struct {
 	PropertyBag genruntime.PropertyBag                  `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_DeliveryRuleUrlPathCondition_STATUS populates our DeliveryRuleUrlPathCondition_STATUS from the provided source DeliveryRuleUrlPathCondition_STATUS
+func (condition *DeliveryRuleUrlPathCondition_STATUS) AssignProperties_From_DeliveryRuleUrlPathCondition_STATUS(source *v20230501s.DeliveryRuleUrlPathCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	condition.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter UrlPathMatchConditionParameters_STATUS
+		err := parameter.AssignProperties_From_UrlPathMatchConditionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlPathMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		condition.Parameters = &parameter
+	} else {
+		condition.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		condition.PropertyBag = propertyBag
+	} else {
+		condition.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleUrlPathCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleUrlPathCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_DeliveryRuleUrlPathCondition_STATUS populates the provided destination DeliveryRuleUrlPathCondition_STATUS from our DeliveryRuleUrlPathCondition_STATUS
+func (condition *DeliveryRuleUrlPathCondition_STATUS) AssignProperties_To_DeliveryRuleUrlPathCondition_STATUS(destination *v20230501s.DeliveryRuleUrlPathCondition_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(condition.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(condition.Name)
+
+	// Parameters
+	if condition.Parameters != nil {
+		var parameter v20230501s.UrlPathMatchConditionParameters_STATUS
+		err := condition.Parameters.AssignProperties_To_UrlPathMatchConditionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlPathMatchConditionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForDeliveryRuleUrlPathCondition_STATUS interface (if implemented) to customize the conversion
+	var conditionAsAny any = condition
+	if augmentedCondition, ok := conditionAsAny.(augmentConversionForDeliveryRuleUrlPathCondition_STATUS); ok {
+		err := augmentedCondition.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.OriginGroupOverrideAction
 type OriginGroupOverrideAction struct {
 	Name        *string                              `json:"name,omitempty"`
 	Parameters  *OriginGroupOverrideActionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag               `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_OriginGroupOverrideAction populates our OriginGroupOverrideAction from the provided source OriginGroupOverrideAction
+func (action *OriginGroupOverrideAction) AssignProperties_From_OriginGroupOverrideAction(source *v20230501s.OriginGroupOverrideAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter OriginGroupOverrideActionParameters
+		err := parameter.AssignProperties_From_OriginGroupOverrideActionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_OriginGroupOverrideActionParameters() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForOriginGroupOverrideAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForOriginGroupOverrideAction); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_OriginGroupOverrideAction populates the provided destination OriginGroupOverrideAction from our OriginGroupOverrideAction
+func (action *OriginGroupOverrideAction) AssignProperties_To_OriginGroupOverrideAction(destination *v20230501s.OriginGroupOverrideAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.OriginGroupOverrideActionParameters
+		err := action.Parameters.AssignProperties_To_OriginGroupOverrideActionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_OriginGroupOverrideActionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForOriginGroupOverrideAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForOriginGroupOverrideAction); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.OriginGroupOverrideAction_STATUS
@@ -916,11 +8660,171 @@ type OriginGroupOverrideAction_STATUS struct {
 	PropertyBag genruntime.PropertyBag                      `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_OriginGroupOverrideAction_STATUS populates our OriginGroupOverrideAction_STATUS from the provided source OriginGroupOverrideAction_STATUS
+func (action *OriginGroupOverrideAction_STATUS) AssignProperties_From_OriginGroupOverrideAction_STATUS(source *v20230501s.OriginGroupOverrideAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter OriginGroupOverrideActionParameters_STATUS
+		err := parameter.AssignProperties_From_OriginGroupOverrideActionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_OriginGroupOverrideActionParameters_STATUS() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForOriginGroupOverrideAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForOriginGroupOverrideAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_OriginGroupOverrideAction_STATUS populates the provided destination OriginGroupOverrideAction_STATUS from our OriginGroupOverrideAction_STATUS
+func (action *OriginGroupOverrideAction_STATUS) AssignProperties_To_OriginGroupOverrideAction_STATUS(destination *v20230501s.OriginGroupOverrideAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.OriginGroupOverrideActionParameters_STATUS
+		err := action.Parameters.AssignProperties_To_OriginGroupOverrideActionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_OriginGroupOverrideActionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForOriginGroupOverrideAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForOriginGroupOverrideAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.UrlRedirectAction
 type UrlRedirectAction struct {
 	Name        *string                      `json:"name,omitempty"`
 	Parameters  *UrlRedirectActionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag       `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_UrlRedirectAction populates our UrlRedirectAction from the provided source UrlRedirectAction
+func (action *UrlRedirectAction) AssignProperties_From_UrlRedirectAction(source *v20230501s.UrlRedirectAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter UrlRedirectActionParameters
+		err := parameter.AssignProperties_From_UrlRedirectActionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlRedirectActionParameters() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRedirectAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForUrlRedirectAction); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlRedirectAction populates the provided destination UrlRedirectAction from our UrlRedirectAction
+func (action *UrlRedirectAction) AssignProperties_To_UrlRedirectAction(destination *v20230501s.UrlRedirectAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.UrlRedirectActionParameters
+		err := action.Parameters.AssignProperties_To_UrlRedirectActionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlRedirectActionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRedirectAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForUrlRedirectAction); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.UrlRedirectAction_STATUS
@@ -930,11 +8834,171 @@ type UrlRedirectAction_STATUS struct {
 	PropertyBag genruntime.PropertyBag              `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_UrlRedirectAction_STATUS populates our UrlRedirectAction_STATUS from the provided source UrlRedirectAction_STATUS
+func (action *UrlRedirectAction_STATUS) AssignProperties_From_UrlRedirectAction_STATUS(source *v20230501s.UrlRedirectAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter UrlRedirectActionParameters_STATUS
+		err := parameter.AssignProperties_From_UrlRedirectActionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlRedirectActionParameters_STATUS() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRedirectAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForUrlRedirectAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlRedirectAction_STATUS populates the provided destination UrlRedirectAction_STATUS from our UrlRedirectAction_STATUS
+func (action *UrlRedirectAction_STATUS) AssignProperties_To_UrlRedirectAction_STATUS(destination *v20230501s.UrlRedirectAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.UrlRedirectActionParameters_STATUS
+		err := action.Parameters.AssignProperties_To_UrlRedirectActionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlRedirectActionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRedirectAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForUrlRedirectAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.UrlRewriteAction
 type UrlRewriteAction struct {
 	Name        *string                     `json:"name,omitempty"`
 	Parameters  *UrlRewriteActionParameters `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag      `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_UrlRewriteAction populates our UrlRewriteAction from the provided source UrlRewriteAction
+func (action *UrlRewriteAction) AssignProperties_From_UrlRewriteAction(source *v20230501s.UrlRewriteAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter UrlRewriteActionParameters
+		err := parameter.AssignProperties_From_UrlRewriteActionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlRewriteActionParameters() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRewriteAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForUrlRewriteAction); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlRewriteAction populates the provided destination UrlRewriteAction from our UrlRewriteAction
+func (action *UrlRewriteAction) AssignProperties_To_UrlRewriteAction(destination *v20230501s.UrlRewriteAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.UrlRewriteActionParameters
+		err := action.Parameters.AssignProperties_To_UrlRewriteActionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlRewriteActionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRewriteAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForUrlRewriteAction); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.UrlRewriteAction_STATUS
@@ -944,6 +9008,86 @@ type UrlRewriteAction_STATUS struct {
 	PropertyBag genruntime.PropertyBag             `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_UrlRewriteAction_STATUS populates our UrlRewriteAction_STATUS from the provided source UrlRewriteAction_STATUS
+func (action *UrlRewriteAction_STATUS) AssignProperties_From_UrlRewriteAction_STATUS(source *v20230501s.UrlRewriteAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter UrlRewriteActionParameters_STATUS
+		err := parameter.AssignProperties_From_UrlRewriteActionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlRewriteActionParameters_STATUS() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRewriteAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForUrlRewriteAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlRewriteAction_STATUS populates the provided destination UrlRewriteAction_STATUS from our UrlRewriteAction_STATUS
+func (action *UrlRewriteAction_STATUS) AssignProperties_To_UrlRewriteAction_STATUS(destination *v20230501s.UrlRewriteAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.UrlRewriteActionParameters_STATUS
+		err := action.Parameters.AssignProperties_To_UrlRewriteActionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlRewriteActionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRewriteAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForUrlRewriteAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.UrlSigningAction
 type UrlSigningAction struct {
 	Name        *string                     `json:"name,omitempty"`
@@ -951,11 +9095,451 @@ type UrlSigningAction struct {
 	PropertyBag genruntime.PropertyBag      `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_UrlSigningAction populates our UrlSigningAction from the provided source UrlSigningAction
+func (action *UrlSigningAction) AssignProperties_From_UrlSigningAction(source *v20230501s.UrlSigningAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter UrlSigningActionParameters
+		err := parameter.AssignProperties_From_UrlSigningActionParameters(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlSigningActionParameters() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForUrlSigningAction); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlSigningAction populates the provided destination UrlSigningAction from our UrlSigningAction
+func (action *UrlSigningAction) AssignProperties_To_UrlSigningAction(destination *v20230501s.UrlSigningAction) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.UrlSigningActionParameters
+		err := action.Parameters.AssignProperties_To_UrlSigningActionParameters(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlSigningActionParameters() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningAction interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForUrlSigningAction); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.UrlSigningAction_STATUS
 type UrlSigningAction_STATUS struct {
 	Name        *string                            `json:"name,omitempty"`
 	Parameters  *UrlSigningActionParameters_STATUS `json:"parameters,omitempty"`
 	PropertyBag genruntime.PropertyBag             `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_UrlSigningAction_STATUS populates our UrlSigningAction_STATUS from the provided source UrlSigningAction_STATUS
+func (action *UrlSigningAction_STATUS) AssignProperties_From_UrlSigningAction_STATUS(source *v20230501s.UrlSigningAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Name
+	action.Name = genruntime.ClonePointerToString(source.Name)
+
+	// Parameters
+	if source.Parameters != nil {
+		var parameter UrlSigningActionParameters_STATUS
+		err := parameter.AssignProperties_From_UrlSigningActionParameters_STATUS(source.Parameters)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_UrlSigningActionParameters_STATUS() to populate field Parameters")
+		}
+		action.Parameters = &parameter
+	} else {
+		action.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		action.PropertyBag = propertyBag
+	} else {
+		action.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForUrlSigningAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlSigningAction_STATUS populates the provided destination UrlSigningAction_STATUS from our UrlSigningAction_STATUS
+func (action *UrlSigningAction_STATUS) AssignProperties_To_UrlSigningAction_STATUS(destination *v20230501s.UrlSigningAction_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(action.PropertyBag)
+
+	// Name
+	destination.Name = genruntime.ClonePointerToString(action.Name)
+
+	// Parameters
+	if action.Parameters != nil {
+		var parameter v20230501s.UrlSigningActionParameters_STATUS
+		err := action.Parameters.AssignProperties_To_UrlSigningActionParameters_STATUS(&parameter)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_UrlSigningActionParameters_STATUS() to populate field Parameters")
+		}
+		destination.Parameters = &parameter
+	} else {
+		destination.Parameters = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningAction_STATUS interface (if implemented) to customize the conversion
+	var actionAsAny any = action
+	if augmentedAction, ok := actionAsAny.(augmentConversionForUrlSigningAction_STATUS); ok {
+		err := augmentedAction.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+type augmentConversionForDeliveryRuleCacheExpirationAction interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleCacheExpirationAction) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleCacheExpirationAction) error
+}
+
+type augmentConversionForDeliveryRuleCacheExpirationAction_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleCacheExpirationAction_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleCacheExpirationAction_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleCacheKeyQueryStringAction interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleCacheKeyQueryStringAction) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleCacheKeyQueryStringAction) error
+}
+
+type augmentConversionForDeliveryRuleCacheKeyQueryStringAction_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleCacheKeyQueryStringAction_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleCacheKeyQueryStringAction_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleClientPortCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleClientPortCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleClientPortCondition) error
+}
+
+type augmentConversionForDeliveryRuleClientPortCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleClientPortCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleClientPortCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleCookiesCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleCookiesCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleCookiesCondition) error
+}
+
+type augmentConversionForDeliveryRuleCookiesCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleCookiesCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleCookiesCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleHostNameCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleHostNameCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleHostNameCondition) error
+}
+
+type augmentConversionForDeliveryRuleHostNameCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleHostNameCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleHostNameCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleHttpVersionCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleHttpVersionCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleHttpVersionCondition) error
+}
+
+type augmentConversionForDeliveryRuleHttpVersionCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleHttpVersionCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleHttpVersionCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleIsDeviceCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleIsDeviceCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleIsDeviceCondition) error
+}
+
+type augmentConversionForDeliveryRuleIsDeviceCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleIsDeviceCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleIsDeviceCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRulePostArgsCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRulePostArgsCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRulePostArgsCondition) error
+}
+
+type augmentConversionForDeliveryRulePostArgsCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRulePostArgsCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRulePostArgsCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleQueryStringCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleQueryStringCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleQueryStringCondition) error
+}
+
+type augmentConversionForDeliveryRuleQueryStringCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleQueryStringCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleQueryStringCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleRemoteAddressCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRemoteAddressCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRemoteAddressCondition) error
+}
+
+type augmentConversionForDeliveryRuleRemoteAddressCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRemoteAddressCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRemoteAddressCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleRequestBodyCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRequestBodyCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRequestBodyCondition) error
+}
+
+type augmentConversionForDeliveryRuleRequestBodyCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRequestBodyCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRequestBodyCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleRequestHeaderAction interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRequestHeaderAction) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRequestHeaderAction) error
+}
+
+type augmentConversionForDeliveryRuleRequestHeaderAction_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRequestHeaderAction_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRequestHeaderAction_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleRequestHeaderCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRequestHeaderCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRequestHeaderCondition) error
+}
+
+type augmentConversionForDeliveryRuleRequestHeaderCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRequestHeaderCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRequestHeaderCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleRequestMethodCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRequestMethodCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRequestMethodCondition) error
+}
+
+type augmentConversionForDeliveryRuleRequestMethodCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRequestMethodCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRequestMethodCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleRequestSchemeCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRequestSchemeCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRequestSchemeCondition) error
+}
+
+type augmentConversionForDeliveryRuleRequestSchemeCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRequestSchemeCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRequestSchemeCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleRequestUriCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRequestUriCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRequestUriCondition) error
+}
+
+type augmentConversionForDeliveryRuleRequestUriCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRequestUriCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRequestUriCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleResponseHeaderAction interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleResponseHeaderAction) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleResponseHeaderAction) error
+}
+
+type augmentConversionForDeliveryRuleResponseHeaderAction_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleResponseHeaderAction_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleResponseHeaderAction_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleRouteConfigurationOverrideAction interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRouteConfigurationOverrideAction) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRouteConfigurationOverrideAction) error
+}
+
+type augmentConversionForDeliveryRuleRouteConfigurationOverrideAction_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleRouteConfigurationOverrideAction_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleRouteConfigurationOverrideAction_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleServerPortCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleServerPortCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleServerPortCondition) error
+}
+
+type augmentConversionForDeliveryRuleServerPortCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleServerPortCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleServerPortCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleSocketAddrCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleSocketAddrCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleSocketAddrCondition) error
+}
+
+type augmentConversionForDeliveryRuleSocketAddrCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleSocketAddrCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleSocketAddrCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleSslProtocolCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleSslProtocolCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleSslProtocolCondition) error
+}
+
+type augmentConversionForDeliveryRuleSslProtocolCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleSslProtocolCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleSslProtocolCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleUrlFileExtensionCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleUrlFileExtensionCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleUrlFileExtensionCondition) error
+}
+
+type augmentConversionForDeliveryRuleUrlFileExtensionCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleUrlFileExtensionCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleUrlFileExtensionCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleUrlFileNameCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleUrlFileNameCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleUrlFileNameCondition) error
+}
+
+type augmentConversionForDeliveryRuleUrlFileNameCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleUrlFileNameCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleUrlFileNameCondition_STATUS) error
+}
+
+type augmentConversionForDeliveryRuleUrlPathCondition interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleUrlPathCondition) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleUrlPathCondition) error
+}
+
+type augmentConversionForDeliveryRuleUrlPathCondition_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.DeliveryRuleUrlPathCondition_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.DeliveryRuleUrlPathCondition_STATUS) error
+}
+
+type augmentConversionForOriginGroupOverrideAction interface {
+	AssignPropertiesFrom(src *v20230501s.OriginGroupOverrideAction) error
+	AssignPropertiesTo(dst *v20230501s.OriginGroupOverrideAction) error
+}
+
+type augmentConversionForOriginGroupOverrideAction_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.OriginGroupOverrideAction_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.OriginGroupOverrideAction_STATUS) error
+}
+
+type augmentConversionForUrlRedirectAction interface {
+	AssignPropertiesFrom(src *v20230501s.UrlRedirectAction) error
+	AssignPropertiesTo(dst *v20230501s.UrlRedirectAction) error
+}
+
+type augmentConversionForUrlRedirectAction_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.UrlRedirectAction_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.UrlRedirectAction_STATUS) error
+}
+
+type augmentConversionForUrlRewriteAction interface {
+	AssignPropertiesFrom(src *v20230501s.UrlRewriteAction) error
+	AssignPropertiesTo(dst *v20230501s.UrlRewriteAction) error
+}
+
+type augmentConversionForUrlRewriteAction_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.UrlRewriteAction_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.UrlRewriteAction_STATUS) error
+}
+
+type augmentConversionForUrlSigningAction interface {
+	AssignPropertiesFrom(src *v20230501s.UrlSigningAction) error
+	AssignPropertiesTo(dst *v20230501s.UrlSigningAction) error
+}
+
+type augmentConversionForUrlSigningAction_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.UrlSigningAction_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.UrlSigningAction_STATUS) error
 }
 
 // Storage version of v1api20210601.CacheExpirationActionParameters
@@ -968,6 +9552,80 @@ type CacheExpirationActionParameters struct {
 	TypeName      *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_CacheExpirationActionParameters populates our CacheExpirationActionParameters from the provided source CacheExpirationActionParameters
+func (parameters *CacheExpirationActionParameters) AssignProperties_From_CacheExpirationActionParameters(source *v20230501s.CacheExpirationActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// CacheBehavior
+	parameters.CacheBehavior = genruntime.ClonePointerToString(source.CacheBehavior)
+
+	// CacheDuration
+	parameters.CacheDuration = genruntime.ClonePointerToString(source.CacheDuration)
+
+	// CacheType
+	parameters.CacheType = genruntime.ClonePointerToString(source.CacheType)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCacheExpirationActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForCacheExpirationActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_CacheExpirationActionParameters populates the provided destination CacheExpirationActionParameters from our CacheExpirationActionParameters
+func (parameters *CacheExpirationActionParameters) AssignProperties_To_CacheExpirationActionParameters(destination *v20230501s.CacheExpirationActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// CacheBehavior
+	destination.CacheBehavior = genruntime.ClonePointerToString(parameters.CacheBehavior)
+
+	// CacheDuration
+	destination.CacheDuration = genruntime.ClonePointerToString(parameters.CacheDuration)
+
+	// CacheType
+	destination.CacheType = genruntime.ClonePointerToString(parameters.CacheType)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCacheExpirationActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForCacheExpirationActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.CacheExpirationActionParameters_STATUS
 // Defines the parameters for the cache expiration action.
 type CacheExpirationActionParameters_STATUS struct {
@@ -976,6 +9634,80 @@ type CacheExpirationActionParameters_STATUS struct {
 	CacheType     *string                `json:"cacheType,omitempty"`
 	PropertyBag   genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	TypeName      *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_CacheExpirationActionParameters_STATUS populates our CacheExpirationActionParameters_STATUS from the provided source CacheExpirationActionParameters_STATUS
+func (parameters *CacheExpirationActionParameters_STATUS) AssignProperties_From_CacheExpirationActionParameters_STATUS(source *v20230501s.CacheExpirationActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// CacheBehavior
+	parameters.CacheBehavior = genruntime.ClonePointerToString(source.CacheBehavior)
+
+	// CacheDuration
+	parameters.CacheDuration = genruntime.ClonePointerToString(source.CacheDuration)
+
+	// CacheType
+	parameters.CacheType = genruntime.ClonePointerToString(source.CacheType)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCacheExpirationActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForCacheExpirationActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_CacheExpirationActionParameters_STATUS populates the provided destination CacheExpirationActionParameters_STATUS from our CacheExpirationActionParameters_STATUS
+func (parameters *CacheExpirationActionParameters_STATUS) AssignProperties_To_CacheExpirationActionParameters_STATUS(destination *v20230501s.CacheExpirationActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// CacheBehavior
+	destination.CacheBehavior = genruntime.ClonePointerToString(parameters.CacheBehavior)
+
+	// CacheDuration
+	destination.CacheDuration = genruntime.ClonePointerToString(parameters.CacheDuration)
+
+	// CacheType
+	destination.CacheType = genruntime.ClonePointerToString(parameters.CacheType)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCacheExpirationActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForCacheExpirationActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.CacheKeyQueryStringActionParameters
@@ -987,6 +9719,74 @@ type CacheKeyQueryStringActionParameters struct {
 	TypeName            *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_CacheKeyQueryStringActionParameters populates our CacheKeyQueryStringActionParameters from the provided source CacheKeyQueryStringActionParameters
+func (parameters *CacheKeyQueryStringActionParameters) AssignProperties_From_CacheKeyQueryStringActionParameters(source *v20230501s.CacheKeyQueryStringActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// QueryParameters
+	parameters.QueryParameters = genruntime.ClonePointerToString(source.QueryParameters)
+
+	// QueryStringBehavior
+	parameters.QueryStringBehavior = genruntime.ClonePointerToString(source.QueryStringBehavior)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCacheKeyQueryStringActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForCacheKeyQueryStringActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_CacheKeyQueryStringActionParameters populates the provided destination CacheKeyQueryStringActionParameters from our CacheKeyQueryStringActionParameters
+func (parameters *CacheKeyQueryStringActionParameters) AssignProperties_To_CacheKeyQueryStringActionParameters(destination *v20230501s.CacheKeyQueryStringActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// QueryParameters
+	destination.QueryParameters = genruntime.ClonePointerToString(parameters.QueryParameters)
+
+	// QueryStringBehavior
+	destination.QueryStringBehavior = genruntime.ClonePointerToString(parameters.QueryStringBehavior)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCacheKeyQueryStringActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForCacheKeyQueryStringActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.CacheKeyQueryStringActionParameters_STATUS
 // Defines the parameters for the cache-key query string action.
 type CacheKeyQueryStringActionParameters_STATUS struct {
@@ -994,6 +9794,74 @@ type CacheKeyQueryStringActionParameters_STATUS struct {
 	QueryParameters     *string                `json:"queryParameters,omitempty"`
 	QueryStringBehavior *string                `json:"queryStringBehavior,omitempty"`
 	TypeName            *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_CacheKeyQueryStringActionParameters_STATUS populates our CacheKeyQueryStringActionParameters_STATUS from the provided source CacheKeyQueryStringActionParameters_STATUS
+func (parameters *CacheKeyQueryStringActionParameters_STATUS) AssignProperties_From_CacheKeyQueryStringActionParameters_STATUS(source *v20230501s.CacheKeyQueryStringActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// QueryParameters
+	parameters.QueryParameters = genruntime.ClonePointerToString(source.QueryParameters)
+
+	// QueryStringBehavior
+	parameters.QueryStringBehavior = genruntime.ClonePointerToString(source.QueryStringBehavior)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCacheKeyQueryStringActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForCacheKeyQueryStringActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_CacheKeyQueryStringActionParameters_STATUS populates the provided destination CacheKeyQueryStringActionParameters_STATUS from our CacheKeyQueryStringActionParameters_STATUS
+func (parameters *CacheKeyQueryStringActionParameters_STATUS) AssignProperties_To_CacheKeyQueryStringActionParameters_STATUS(destination *v20230501s.CacheKeyQueryStringActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// QueryParameters
+	destination.QueryParameters = genruntime.ClonePointerToString(parameters.QueryParameters)
+
+	// QueryStringBehavior
+	destination.QueryStringBehavior = genruntime.ClonePointerToString(parameters.QueryStringBehavior)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCacheKeyQueryStringActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForCacheKeyQueryStringActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.ClientPortMatchConditionParameters
@@ -1007,6 +9875,96 @@ type ClientPortMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_ClientPortMatchConditionParameters populates our ClientPortMatchConditionParameters from the provided source ClientPortMatchConditionParameters
+func (parameters *ClientPortMatchConditionParameters) AssignProperties_From_ClientPortMatchConditionParameters(source *v20230501s.ClientPortMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForClientPortMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForClientPortMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_ClientPortMatchConditionParameters populates the provided destination ClientPortMatchConditionParameters from our ClientPortMatchConditionParameters
+func (parameters *ClientPortMatchConditionParameters) AssignProperties_To_ClientPortMatchConditionParameters(destination *v20230501s.ClientPortMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForClientPortMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForClientPortMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.ClientPortMatchConditionParameters_STATUS
 // Defines the parameters for ClientPort match conditions
 type ClientPortMatchConditionParameters_STATUS struct {
@@ -1016,6 +9974,96 @@ type ClientPortMatchConditionParameters_STATUS struct {
 	PropertyBag     genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_ClientPortMatchConditionParameters_STATUS populates our ClientPortMatchConditionParameters_STATUS from the provided source ClientPortMatchConditionParameters_STATUS
+func (parameters *ClientPortMatchConditionParameters_STATUS) AssignProperties_From_ClientPortMatchConditionParameters_STATUS(source *v20230501s.ClientPortMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForClientPortMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForClientPortMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_ClientPortMatchConditionParameters_STATUS populates the provided destination ClientPortMatchConditionParameters_STATUS from our ClientPortMatchConditionParameters_STATUS
+func (parameters *ClientPortMatchConditionParameters_STATUS) AssignProperties_To_ClientPortMatchConditionParameters_STATUS(destination *v20230501s.ClientPortMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForClientPortMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForClientPortMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.CookiesMatchConditionParameters
@@ -1030,6 +10078,102 @@ type CookiesMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_CookiesMatchConditionParameters populates our CookiesMatchConditionParameters from the provided source CookiesMatchConditionParameters
+func (parameters *CookiesMatchConditionParameters) AssignProperties_From_CookiesMatchConditionParameters(source *v20230501s.CookiesMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Selector
+	parameters.Selector = genruntime.ClonePointerToString(source.Selector)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCookiesMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForCookiesMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_CookiesMatchConditionParameters populates the provided destination CookiesMatchConditionParameters from our CookiesMatchConditionParameters
+func (parameters *CookiesMatchConditionParameters) AssignProperties_To_CookiesMatchConditionParameters(destination *v20230501s.CookiesMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Selector
+	destination.Selector = genruntime.ClonePointerToString(parameters.Selector)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCookiesMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForCookiesMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.CookiesMatchConditionParameters_STATUS
 // Defines the parameters for Cookies match conditions
 type CookiesMatchConditionParameters_STATUS struct {
@@ -1042,6 +10186,102 @@ type CookiesMatchConditionParameters_STATUS struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_CookiesMatchConditionParameters_STATUS populates our CookiesMatchConditionParameters_STATUS from the provided source CookiesMatchConditionParameters_STATUS
+func (parameters *CookiesMatchConditionParameters_STATUS) AssignProperties_From_CookiesMatchConditionParameters_STATUS(source *v20230501s.CookiesMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Selector
+	parameters.Selector = genruntime.ClonePointerToString(source.Selector)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCookiesMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForCookiesMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_CookiesMatchConditionParameters_STATUS populates the provided destination CookiesMatchConditionParameters_STATUS from our CookiesMatchConditionParameters_STATUS
+func (parameters *CookiesMatchConditionParameters_STATUS) AssignProperties_To_CookiesMatchConditionParameters_STATUS(destination *v20230501s.CookiesMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Selector
+	destination.Selector = genruntime.ClonePointerToString(parameters.Selector)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCookiesMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForCookiesMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.HeaderActionParameters
 // Defines the parameters for the request header action.
 type HeaderActionParameters struct {
@@ -1052,6 +10292,80 @@ type HeaderActionParameters struct {
 	Value        *string                `json:"value,omitempty"`
 }
 
+// AssignProperties_From_HeaderActionParameters populates our HeaderActionParameters from the provided source HeaderActionParameters
+func (parameters *HeaderActionParameters) AssignProperties_From_HeaderActionParameters(source *v20230501s.HeaderActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// HeaderAction
+	parameters.HeaderAction = genruntime.ClonePointerToString(source.HeaderAction)
+
+	// HeaderName
+	parameters.HeaderName = genruntime.ClonePointerToString(source.HeaderName)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Value
+	parameters.Value = genruntime.ClonePointerToString(source.Value)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForHeaderActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForHeaderActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_HeaderActionParameters populates the provided destination HeaderActionParameters from our HeaderActionParameters
+func (parameters *HeaderActionParameters) AssignProperties_To_HeaderActionParameters(destination *v20230501s.HeaderActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// HeaderAction
+	destination.HeaderAction = genruntime.ClonePointerToString(parameters.HeaderAction)
+
+	// HeaderName
+	destination.HeaderName = genruntime.ClonePointerToString(parameters.HeaderName)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Value
+	destination.Value = genruntime.ClonePointerToString(parameters.Value)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForHeaderActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForHeaderActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.HeaderActionParameters_STATUS
 // Defines the parameters for the request header action.
 type HeaderActionParameters_STATUS struct {
@@ -1060,6 +10374,80 @@ type HeaderActionParameters_STATUS struct {
 	PropertyBag  genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	TypeName     *string                `json:"typeName,omitempty"`
 	Value        *string                `json:"value,omitempty"`
+}
+
+// AssignProperties_From_HeaderActionParameters_STATUS populates our HeaderActionParameters_STATUS from the provided source HeaderActionParameters_STATUS
+func (parameters *HeaderActionParameters_STATUS) AssignProperties_From_HeaderActionParameters_STATUS(source *v20230501s.HeaderActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// HeaderAction
+	parameters.HeaderAction = genruntime.ClonePointerToString(source.HeaderAction)
+
+	// HeaderName
+	parameters.HeaderName = genruntime.ClonePointerToString(source.HeaderName)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Value
+	parameters.Value = genruntime.ClonePointerToString(source.Value)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForHeaderActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForHeaderActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_HeaderActionParameters_STATUS populates the provided destination HeaderActionParameters_STATUS from our HeaderActionParameters_STATUS
+func (parameters *HeaderActionParameters_STATUS) AssignProperties_To_HeaderActionParameters_STATUS(destination *v20230501s.HeaderActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// HeaderAction
+	destination.HeaderAction = genruntime.ClonePointerToString(parameters.HeaderAction)
+
+	// HeaderName
+	destination.HeaderName = genruntime.ClonePointerToString(parameters.HeaderName)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Value
+	destination.Value = genruntime.ClonePointerToString(parameters.Value)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForHeaderActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForHeaderActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.HostNameMatchConditionParameters
@@ -1073,6 +10461,96 @@ type HostNameMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_HostNameMatchConditionParameters populates our HostNameMatchConditionParameters from the provided source HostNameMatchConditionParameters
+func (parameters *HostNameMatchConditionParameters) AssignProperties_From_HostNameMatchConditionParameters(source *v20230501s.HostNameMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForHostNameMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForHostNameMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_HostNameMatchConditionParameters populates the provided destination HostNameMatchConditionParameters from our HostNameMatchConditionParameters
+func (parameters *HostNameMatchConditionParameters) AssignProperties_To_HostNameMatchConditionParameters(destination *v20230501s.HostNameMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForHostNameMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForHostNameMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.HostNameMatchConditionParameters_STATUS
 // Defines the parameters for HostName match conditions
 type HostNameMatchConditionParameters_STATUS struct {
@@ -1082,6 +10560,96 @@ type HostNameMatchConditionParameters_STATUS struct {
 	PropertyBag     genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_HostNameMatchConditionParameters_STATUS populates our HostNameMatchConditionParameters_STATUS from the provided source HostNameMatchConditionParameters_STATUS
+func (parameters *HostNameMatchConditionParameters_STATUS) AssignProperties_From_HostNameMatchConditionParameters_STATUS(source *v20230501s.HostNameMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForHostNameMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForHostNameMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_HostNameMatchConditionParameters_STATUS populates the provided destination HostNameMatchConditionParameters_STATUS from our HostNameMatchConditionParameters_STATUS
+func (parameters *HostNameMatchConditionParameters_STATUS) AssignProperties_To_HostNameMatchConditionParameters_STATUS(destination *v20230501s.HostNameMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForHostNameMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForHostNameMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.HttpVersionMatchConditionParameters
@@ -1095,6 +10663,96 @@ type HttpVersionMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_HttpVersionMatchConditionParameters populates our HttpVersionMatchConditionParameters from the provided source HttpVersionMatchConditionParameters
+func (parameters *HttpVersionMatchConditionParameters) AssignProperties_From_HttpVersionMatchConditionParameters(source *v20230501s.HttpVersionMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForHttpVersionMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForHttpVersionMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_HttpVersionMatchConditionParameters populates the provided destination HttpVersionMatchConditionParameters from our HttpVersionMatchConditionParameters
+func (parameters *HttpVersionMatchConditionParameters) AssignProperties_To_HttpVersionMatchConditionParameters(destination *v20230501s.HttpVersionMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForHttpVersionMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForHttpVersionMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.HttpVersionMatchConditionParameters_STATUS
 // Defines the parameters for HttpVersion match conditions
 type HttpVersionMatchConditionParameters_STATUS struct {
@@ -1104,6 +10762,96 @@ type HttpVersionMatchConditionParameters_STATUS struct {
 	PropertyBag     genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_HttpVersionMatchConditionParameters_STATUS populates our HttpVersionMatchConditionParameters_STATUS from the provided source HttpVersionMatchConditionParameters_STATUS
+func (parameters *HttpVersionMatchConditionParameters_STATUS) AssignProperties_From_HttpVersionMatchConditionParameters_STATUS(source *v20230501s.HttpVersionMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForHttpVersionMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForHttpVersionMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_HttpVersionMatchConditionParameters_STATUS populates the provided destination HttpVersionMatchConditionParameters_STATUS from our HttpVersionMatchConditionParameters_STATUS
+func (parameters *HttpVersionMatchConditionParameters_STATUS) AssignProperties_To_HttpVersionMatchConditionParameters_STATUS(destination *v20230501s.HttpVersionMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForHttpVersionMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForHttpVersionMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.IsDeviceMatchConditionParameters
@@ -1117,6 +10865,96 @@ type IsDeviceMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_IsDeviceMatchConditionParameters populates our IsDeviceMatchConditionParameters from the provided source IsDeviceMatchConditionParameters
+func (parameters *IsDeviceMatchConditionParameters) AssignProperties_From_IsDeviceMatchConditionParameters(source *v20230501s.IsDeviceMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForIsDeviceMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForIsDeviceMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_IsDeviceMatchConditionParameters populates the provided destination IsDeviceMatchConditionParameters from our IsDeviceMatchConditionParameters
+func (parameters *IsDeviceMatchConditionParameters) AssignProperties_To_IsDeviceMatchConditionParameters(destination *v20230501s.IsDeviceMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForIsDeviceMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForIsDeviceMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.IsDeviceMatchConditionParameters_STATUS
 // Defines the parameters for IsDevice match conditions
 type IsDeviceMatchConditionParameters_STATUS struct {
@@ -1128,6 +10966,96 @@ type IsDeviceMatchConditionParameters_STATUS struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_IsDeviceMatchConditionParameters_STATUS populates our IsDeviceMatchConditionParameters_STATUS from the provided source IsDeviceMatchConditionParameters_STATUS
+func (parameters *IsDeviceMatchConditionParameters_STATUS) AssignProperties_From_IsDeviceMatchConditionParameters_STATUS(source *v20230501s.IsDeviceMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForIsDeviceMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForIsDeviceMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_IsDeviceMatchConditionParameters_STATUS populates the provided destination IsDeviceMatchConditionParameters_STATUS from our IsDeviceMatchConditionParameters_STATUS
+func (parameters *IsDeviceMatchConditionParameters_STATUS) AssignProperties_To_IsDeviceMatchConditionParameters_STATUS(destination *v20230501s.IsDeviceMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForIsDeviceMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForIsDeviceMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.OriginGroupOverrideActionParameters
 // Defines the parameters for the origin group override action.
 type OriginGroupOverrideActionParameters struct {
@@ -1136,12 +11064,172 @@ type OriginGroupOverrideActionParameters struct {
 	TypeName    *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_OriginGroupOverrideActionParameters populates our OriginGroupOverrideActionParameters from the provided source OriginGroupOverrideActionParameters
+func (parameters *OriginGroupOverrideActionParameters) AssignProperties_From_OriginGroupOverrideActionParameters(source *v20230501s.OriginGroupOverrideActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// OriginGroup
+	if source.OriginGroup != nil {
+		var originGroup ResourceReference
+		err := originGroup.AssignProperties_From_ResourceReference(source.OriginGroup)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_ResourceReference() to populate field OriginGroup")
+		}
+		parameters.OriginGroup = &originGroup
+	} else {
+		parameters.OriginGroup = nil
+	}
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForOriginGroupOverrideActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForOriginGroupOverrideActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_OriginGroupOverrideActionParameters populates the provided destination OriginGroupOverrideActionParameters from our OriginGroupOverrideActionParameters
+func (parameters *OriginGroupOverrideActionParameters) AssignProperties_To_OriginGroupOverrideActionParameters(destination *v20230501s.OriginGroupOverrideActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// OriginGroup
+	if parameters.OriginGroup != nil {
+		var originGroup v20230501s.ResourceReference
+		err := parameters.OriginGroup.AssignProperties_To_ResourceReference(&originGroup)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_ResourceReference() to populate field OriginGroup")
+		}
+		destination.OriginGroup = &originGroup
+	} else {
+		destination.OriginGroup = nil
+	}
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForOriginGroupOverrideActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForOriginGroupOverrideActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.OriginGroupOverrideActionParameters_STATUS
 // Defines the parameters for the origin group override action.
 type OriginGroupOverrideActionParameters_STATUS struct {
 	OriginGroup *ResourceReference_STATUS `json:"originGroup,omitempty"`
 	PropertyBag genruntime.PropertyBag    `json:"$propertyBag,omitempty"`
 	TypeName    *string                   `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_OriginGroupOverrideActionParameters_STATUS populates our OriginGroupOverrideActionParameters_STATUS from the provided source OriginGroupOverrideActionParameters_STATUS
+func (parameters *OriginGroupOverrideActionParameters_STATUS) AssignProperties_From_OriginGroupOverrideActionParameters_STATUS(source *v20230501s.OriginGroupOverrideActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// OriginGroup
+	if source.OriginGroup != nil {
+		var originGroup ResourceReference_STATUS
+		err := originGroup.AssignProperties_From_ResourceReference_STATUS(source.OriginGroup)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_ResourceReference_STATUS() to populate field OriginGroup")
+		}
+		parameters.OriginGroup = &originGroup
+	} else {
+		parameters.OriginGroup = nil
+	}
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForOriginGroupOverrideActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForOriginGroupOverrideActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_OriginGroupOverrideActionParameters_STATUS populates the provided destination OriginGroupOverrideActionParameters_STATUS from our OriginGroupOverrideActionParameters_STATUS
+func (parameters *OriginGroupOverrideActionParameters_STATUS) AssignProperties_To_OriginGroupOverrideActionParameters_STATUS(destination *v20230501s.OriginGroupOverrideActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// OriginGroup
+	if parameters.OriginGroup != nil {
+		var originGroup v20230501s.ResourceReference_STATUS
+		err := parameters.OriginGroup.AssignProperties_To_ResourceReference_STATUS(&originGroup)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_ResourceReference_STATUS() to populate field OriginGroup")
+		}
+		destination.OriginGroup = &originGroup
+	} else {
+		destination.OriginGroup = nil
+	}
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForOriginGroupOverrideActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForOriginGroupOverrideActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.PostArgsMatchConditionParameters
@@ -1156,6 +11244,102 @@ type PostArgsMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_PostArgsMatchConditionParameters populates our PostArgsMatchConditionParameters from the provided source PostArgsMatchConditionParameters
+func (parameters *PostArgsMatchConditionParameters) AssignProperties_From_PostArgsMatchConditionParameters(source *v20230501s.PostArgsMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Selector
+	parameters.Selector = genruntime.ClonePointerToString(source.Selector)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForPostArgsMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForPostArgsMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_PostArgsMatchConditionParameters populates the provided destination PostArgsMatchConditionParameters from our PostArgsMatchConditionParameters
+func (parameters *PostArgsMatchConditionParameters) AssignProperties_To_PostArgsMatchConditionParameters(destination *v20230501s.PostArgsMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Selector
+	destination.Selector = genruntime.ClonePointerToString(parameters.Selector)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForPostArgsMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForPostArgsMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.PostArgsMatchConditionParameters_STATUS
 // Defines the parameters for PostArgs match conditions
 type PostArgsMatchConditionParameters_STATUS struct {
@@ -1166,6 +11350,102 @@ type PostArgsMatchConditionParameters_STATUS struct {
 	Selector        *string                `json:"selector,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_PostArgsMatchConditionParameters_STATUS populates our PostArgsMatchConditionParameters_STATUS from the provided source PostArgsMatchConditionParameters_STATUS
+func (parameters *PostArgsMatchConditionParameters_STATUS) AssignProperties_From_PostArgsMatchConditionParameters_STATUS(source *v20230501s.PostArgsMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Selector
+	parameters.Selector = genruntime.ClonePointerToString(source.Selector)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForPostArgsMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForPostArgsMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_PostArgsMatchConditionParameters_STATUS populates the provided destination PostArgsMatchConditionParameters_STATUS from our PostArgsMatchConditionParameters_STATUS
+func (parameters *PostArgsMatchConditionParameters_STATUS) AssignProperties_To_PostArgsMatchConditionParameters_STATUS(destination *v20230501s.PostArgsMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Selector
+	destination.Selector = genruntime.ClonePointerToString(parameters.Selector)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForPostArgsMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForPostArgsMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.QueryStringMatchConditionParameters
@@ -1179,6 +11459,96 @@ type QueryStringMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_QueryStringMatchConditionParameters populates our QueryStringMatchConditionParameters from the provided source QueryStringMatchConditionParameters
+func (parameters *QueryStringMatchConditionParameters) AssignProperties_From_QueryStringMatchConditionParameters(source *v20230501s.QueryStringMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForQueryStringMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForQueryStringMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_QueryStringMatchConditionParameters populates the provided destination QueryStringMatchConditionParameters from our QueryStringMatchConditionParameters
+func (parameters *QueryStringMatchConditionParameters) AssignProperties_To_QueryStringMatchConditionParameters(destination *v20230501s.QueryStringMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForQueryStringMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForQueryStringMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.QueryStringMatchConditionParameters_STATUS
 // Defines the parameters for QueryString match conditions
 type QueryStringMatchConditionParameters_STATUS struct {
@@ -1188,6 +11558,96 @@ type QueryStringMatchConditionParameters_STATUS struct {
 	PropertyBag     genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_QueryStringMatchConditionParameters_STATUS populates our QueryStringMatchConditionParameters_STATUS from the provided source QueryStringMatchConditionParameters_STATUS
+func (parameters *QueryStringMatchConditionParameters_STATUS) AssignProperties_From_QueryStringMatchConditionParameters_STATUS(source *v20230501s.QueryStringMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForQueryStringMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForQueryStringMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_QueryStringMatchConditionParameters_STATUS populates the provided destination QueryStringMatchConditionParameters_STATUS from our QueryStringMatchConditionParameters_STATUS
+func (parameters *QueryStringMatchConditionParameters_STATUS) AssignProperties_To_QueryStringMatchConditionParameters_STATUS(destination *v20230501s.QueryStringMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForQueryStringMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForQueryStringMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.RemoteAddressMatchConditionParameters
@@ -1201,6 +11661,96 @@ type RemoteAddressMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_RemoteAddressMatchConditionParameters populates our RemoteAddressMatchConditionParameters from the provided source RemoteAddressMatchConditionParameters
+func (parameters *RemoteAddressMatchConditionParameters) AssignProperties_From_RemoteAddressMatchConditionParameters(source *v20230501s.RemoteAddressMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRemoteAddressMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRemoteAddressMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_RemoteAddressMatchConditionParameters populates the provided destination RemoteAddressMatchConditionParameters from our RemoteAddressMatchConditionParameters
+func (parameters *RemoteAddressMatchConditionParameters) AssignProperties_To_RemoteAddressMatchConditionParameters(destination *v20230501s.RemoteAddressMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRemoteAddressMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRemoteAddressMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.RemoteAddressMatchConditionParameters_STATUS
 // Defines the parameters for RemoteAddress match conditions
 type RemoteAddressMatchConditionParameters_STATUS struct {
@@ -1210,6 +11760,96 @@ type RemoteAddressMatchConditionParameters_STATUS struct {
 	PropertyBag     genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_RemoteAddressMatchConditionParameters_STATUS populates our RemoteAddressMatchConditionParameters_STATUS from the provided source RemoteAddressMatchConditionParameters_STATUS
+func (parameters *RemoteAddressMatchConditionParameters_STATUS) AssignProperties_From_RemoteAddressMatchConditionParameters_STATUS(source *v20230501s.RemoteAddressMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRemoteAddressMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRemoteAddressMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_RemoteAddressMatchConditionParameters_STATUS populates the provided destination RemoteAddressMatchConditionParameters_STATUS from our RemoteAddressMatchConditionParameters_STATUS
+func (parameters *RemoteAddressMatchConditionParameters_STATUS) AssignProperties_To_RemoteAddressMatchConditionParameters_STATUS(destination *v20230501s.RemoteAddressMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRemoteAddressMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRemoteAddressMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.RequestBodyMatchConditionParameters
@@ -1223,6 +11863,96 @@ type RequestBodyMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_RequestBodyMatchConditionParameters populates our RequestBodyMatchConditionParameters from the provided source RequestBodyMatchConditionParameters
+func (parameters *RequestBodyMatchConditionParameters) AssignProperties_From_RequestBodyMatchConditionParameters(source *v20230501s.RequestBodyMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestBodyMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestBodyMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_RequestBodyMatchConditionParameters populates the provided destination RequestBodyMatchConditionParameters from our RequestBodyMatchConditionParameters
+func (parameters *RequestBodyMatchConditionParameters) AssignProperties_To_RequestBodyMatchConditionParameters(destination *v20230501s.RequestBodyMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestBodyMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestBodyMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.RequestBodyMatchConditionParameters_STATUS
 // Defines the parameters for RequestBody match conditions
 type RequestBodyMatchConditionParameters_STATUS struct {
@@ -1232,6 +11962,96 @@ type RequestBodyMatchConditionParameters_STATUS struct {
 	PropertyBag     genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_RequestBodyMatchConditionParameters_STATUS populates our RequestBodyMatchConditionParameters_STATUS from the provided source RequestBodyMatchConditionParameters_STATUS
+func (parameters *RequestBodyMatchConditionParameters_STATUS) AssignProperties_From_RequestBodyMatchConditionParameters_STATUS(source *v20230501s.RequestBodyMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestBodyMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestBodyMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_RequestBodyMatchConditionParameters_STATUS populates the provided destination RequestBodyMatchConditionParameters_STATUS from our RequestBodyMatchConditionParameters_STATUS
+func (parameters *RequestBodyMatchConditionParameters_STATUS) AssignProperties_To_RequestBodyMatchConditionParameters_STATUS(destination *v20230501s.RequestBodyMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestBodyMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestBodyMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.RequestHeaderMatchConditionParameters
@@ -1246,6 +12066,102 @@ type RequestHeaderMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_RequestHeaderMatchConditionParameters populates our RequestHeaderMatchConditionParameters from the provided source RequestHeaderMatchConditionParameters
+func (parameters *RequestHeaderMatchConditionParameters) AssignProperties_From_RequestHeaderMatchConditionParameters(source *v20230501s.RequestHeaderMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Selector
+	parameters.Selector = genruntime.ClonePointerToString(source.Selector)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestHeaderMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestHeaderMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_RequestHeaderMatchConditionParameters populates the provided destination RequestHeaderMatchConditionParameters from our RequestHeaderMatchConditionParameters
+func (parameters *RequestHeaderMatchConditionParameters) AssignProperties_To_RequestHeaderMatchConditionParameters(destination *v20230501s.RequestHeaderMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Selector
+	destination.Selector = genruntime.ClonePointerToString(parameters.Selector)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestHeaderMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestHeaderMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.RequestHeaderMatchConditionParameters_STATUS
 // Defines the parameters for RequestHeader match conditions
 type RequestHeaderMatchConditionParameters_STATUS struct {
@@ -1256,6 +12172,102 @@ type RequestHeaderMatchConditionParameters_STATUS struct {
 	Selector        *string                `json:"selector,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_RequestHeaderMatchConditionParameters_STATUS populates our RequestHeaderMatchConditionParameters_STATUS from the provided source RequestHeaderMatchConditionParameters_STATUS
+func (parameters *RequestHeaderMatchConditionParameters_STATUS) AssignProperties_From_RequestHeaderMatchConditionParameters_STATUS(source *v20230501s.RequestHeaderMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Selector
+	parameters.Selector = genruntime.ClonePointerToString(source.Selector)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestHeaderMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestHeaderMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_RequestHeaderMatchConditionParameters_STATUS populates the provided destination RequestHeaderMatchConditionParameters_STATUS from our RequestHeaderMatchConditionParameters_STATUS
+func (parameters *RequestHeaderMatchConditionParameters_STATUS) AssignProperties_To_RequestHeaderMatchConditionParameters_STATUS(destination *v20230501s.RequestHeaderMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Selector
+	destination.Selector = genruntime.ClonePointerToString(parameters.Selector)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestHeaderMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestHeaderMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.RequestMethodMatchConditionParameters
@@ -1269,6 +12281,96 @@ type RequestMethodMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_RequestMethodMatchConditionParameters populates our RequestMethodMatchConditionParameters from the provided source RequestMethodMatchConditionParameters
+func (parameters *RequestMethodMatchConditionParameters) AssignProperties_From_RequestMethodMatchConditionParameters(source *v20230501s.RequestMethodMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestMethodMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestMethodMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_RequestMethodMatchConditionParameters populates the provided destination RequestMethodMatchConditionParameters from our RequestMethodMatchConditionParameters
+func (parameters *RequestMethodMatchConditionParameters) AssignProperties_To_RequestMethodMatchConditionParameters(destination *v20230501s.RequestMethodMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestMethodMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestMethodMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.RequestMethodMatchConditionParameters_STATUS
 // Defines the parameters for RequestMethod match conditions
 type RequestMethodMatchConditionParameters_STATUS struct {
@@ -1278,6 +12380,96 @@ type RequestMethodMatchConditionParameters_STATUS struct {
 	PropertyBag     genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_RequestMethodMatchConditionParameters_STATUS populates our RequestMethodMatchConditionParameters_STATUS from the provided source RequestMethodMatchConditionParameters_STATUS
+func (parameters *RequestMethodMatchConditionParameters_STATUS) AssignProperties_From_RequestMethodMatchConditionParameters_STATUS(source *v20230501s.RequestMethodMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestMethodMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestMethodMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_RequestMethodMatchConditionParameters_STATUS populates the provided destination RequestMethodMatchConditionParameters_STATUS from our RequestMethodMatchConditionParameters_STATUS
+func (parameters *RequestMethodMatchConditionParameters_STATUS) AssignProperties_To_RequestMethodMatchConditionParameters_STATUS(destination *v20230501s.RequestMethodMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestMethodMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestMethodMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.RequestSchemeMatchConditionParameters
@@ -1291,6 +12483,96 @@ type RequestSchemeMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_RequestSchemeMatchConditionParameters populates our RequestSchemeMatchConditionParameters from the provided source RequestSchemeMatchConditionParameters
+func (parameters *RequestSchemeMatchConditionParameters) AssignProperties_From_RequestSchemeMatchConditionParameters(source *v20230501s.RequestSchemeMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestSchemeMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestSchemeMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_RequestSchemeMatchConditionParameters populates the provided destination RequestSchemeMatchConditionParameters from our RequestSchemeMatchConditionParameters
+func (parameters *RequestSchemeMatchConditionParameters) AssignProperties_To_RequestSchemeMatchConditionParameters(destination *v20230501s.RequestSchemeMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestSchemeMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestSchemeMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.RequestSchemeMatchConditionParameters_STATUS
 // Defines the parameters for RequestScheme match conditions
 type RequestSchemeMatchConditionParameters_STATUS struct {
@@ -1300,6 +12582,96 @@ type RequestSchemeMatchConditionParameters_STATUS struct {
 	PropertyBag     genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_RequestSchemeMatchConditionParameters_STATUS populates our RequestSchemeMatchConditionParameters_STATUS from the provided source RequestSchemeMatchConditionParameters_STATUS
+func (parameters *RequestSchemeMatchConditionParameters_STATUS) AssignProperties_From_RequestSchemeMatchConditionParameters_STATUS(source *v20230501s.RequestSchemeMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestSchemeMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestSchemeMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_RequestSchemeMatchConditionParameters_STATUS populates the provided destination RequestSchemeMatchConditionParameters_STATUS from our RequestSchemeMatchConditionParameters_STATUS
+func (parameters *RequestSchemeMatchConditionParameters_STATUS) AssignProperties_To_RequestSchemeMatchConditionParameters_STATUS(destination *v20230501s.RequestSchemeMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestSchemeMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestSchemeMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.RequestUriMatchConditionParameters
@@ -1313,6 +12685,96 @@ type RequestUriMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_RequestUriMatchConditionParameters populates our RequestUriMatchConditionParameters from the provided source RequestUriMatchConditionParameters
+func (parameters *RequestUriMatchConditionParameters) AssignProperties_From_RequestUriMatchConditionParameters(source *v20230501s.RequestUriMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestUriMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestUriMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_RequestUriMatchConditionParameters populates the provided destination RequestUriMatchConditionParameters from our RequestUriMatchConditionParameters
+func (parameters *RequestUriMatchConditionParameters) AssignProperties_To_RequestUriMatchConditionParameters(destination *v20230501s.RequestUriMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestUriMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestUriMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.RequestUriMatchConditionParameters_STATUS
 // Defines the parameters for RequestUri match conditions
 type RequestUriMatchConditionParameters_STATUS struct {
@@ -1324,6 +12786,96 @@ type RequestUriMatchConditionParameters_STATUS struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_RequestUriMatchConditionParameters_STATUS populates our RequestUriMatchConditionParameters_STATUS from the provided source RequestUriMatchConditionParameters_STATUS
+func (parameters *RequestUriMatchConditionParameters_STATUS) AssignProperties_From_RequestUriMatchConditionParameters_STATUS(source *v20230501s.RequestUriMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestUriMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestUriMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_RequestUriMatchConditionParameters_STATUS populates the provided destination RequestUriMatchConditionParameters_STATUS from our RequestUriMatchConditionParameters_STATUS
+func (parameters *RequestUriMatchConditionParameters_STATUS) AssignProperties_To_RequestUriMatchConditionParameters_STATUS(destination *v20230501s.RequestUriMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRequestUriMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRequestUriMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.RouteConfigurationOverrideActionParameters
 // Defines the parameters for the route configuration override action.
 type RouteConfigurationOverrideActionParameters struct {
@@ -1333,6 +12885,110 @@ type RouteConfigurationOverrideActionParameters struct {
 	TypeName            *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_RouteConfigurationOverrideActionParameters populates our RouteConfigurationOverrideActionParameters from the provided source RouteConfigurationOverrideActionParameters
+func (parameters *RouteConfigurationOverrideActionParameters) AssignProperties_From_RouteConfigurationOverrideActionParameters(source *v20230501s.RouteConfigurationOverrideActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// CacheConfiguration
+	if source.CacheConfiguration != nil {
+		var cacheConfiguration CacheConfiguration
+		err := cacheConfiguration.AssignProperties_From_CacheConfiguration(source.CacheConfiguration)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_CacheConfiguration() to populate field CacheConfiguration")
+		}
+		parameters.CacheConfiguration = &cacheConfiguration
+	} else {
+		parameters.CacheConfiguration = nil
+	}
+
+	// OriginGroupOverride
+	if source.OriginGroupOverride != nil {
+		var originGroupOverride OriginGroupOverride
+		err := originGroupOverride.AssignProperties_From_OriginGroupOverride(source.OriginGroupOverride)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_OriginGroupOverride() to populate field OriginGroupOverride")
+		}
+		parameters.OriginGroupOverride = &originGroupOverride
+	} else {
+		parameters.OriginGroupOverride = nil
+	}
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRouteConfigurationOverrideActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRouteConfigurationOverrideActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_RouteConfigurationOverrideActionParameters populates the provided destination RouteConfigurationOverrideActionParameters from our RouteConfigurationOverrideActionParameters
+func (parameters *RouteConfigurationOverrideActionParameters) AssignProperties_To_RouteConfigurationOverrideActionParameters(destination *v20230501s.RouteConfigurationOverrideActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// CacheConfiguration
+	if parameters.CacheConfiguration != nil {
+		var cacheConfiguration v20230501s.CacheConfiguration
+		err := parameters.CacheConfiguration.AssignProperties_To_CacheConfiguration(&cacheConfiguration)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_CacheConfiguration() to populate field CacheConfiguration")
+		}
+		destination.CacheConfiguration = &cacheConfiguration
+	} else {
+		destination.CacheConfiguration = nil
+	}
+
+	// OriginGroupOverride
+	if parameters.OriginGroupOverride != nil {
+		var originGroupOverride v20230501s.OriginGroupOverride
+		err := parameters.OriginGroupOverride.AssignProperties_To_OriginGroupOverride(&originGroupOverride)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_OriginGroupOverride() to populate field OriginGroupOverride")
+		}
+		destination.OriginGroupOverride = &originGroupOverride
+	} else {
+		destination.OriginGroupOverride = nil
+	}
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRouteConfigurationOverrideActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRouteConfigurationOverrideActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.RouteConfigurationOverrideActionParameters_STATUS
 // Defines the parameters for the route configuration override action.
 type RouteConfigurationOverrideActionParameters_STATUS struct {
@@ -1340,6 +12996,110 @@ type RouteConfigurationOverrideActionParameters_STATUS struct {
 	OriginGroupOverride *OriginGroupOverride_STATUS `json:"originGroupOverride,omitempty"`
 	PropertyBag         genruntime.PropertyBag      `json:"$propertyBag,omitempty"`
 	TypeName            *string                     `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_RouteConfigurationOverrideActionParameters_STATUS populates our RouteConfigurationOverrideActionParameters_STATUS from the provided source RouteConfigurationOverrideActionParameters_STATUS
+func (parameters *RouteConfigurationOverrideActionParameters_STATUS) AssignProperties_From_RouteConfigurationOverrideActionParameters_STATUS(source *v20230501s.RouteConfigurationOverrideActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// CacheConfiguration
+	if source.CacheConfiguration != nil {
+		var cacheConfiguration CacheConfiguration_STATUS
+		err := cacheConfiguration.AssignProperties_From_CacheConfiguration_STATUS(source.CacheConfiguration)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_CacheConfiguration_STATUS() to populate field CacheConfiguration")
+		}
+		parameters.CacheConfiguration = &cacheConfiguration
+	} else {
+		parameters.CacheConfiguration = nil
+	}
+
+	// OriginGroupOverride
+	if source.OriginGroupOverride != nil {
+		var originGroupOverride OriginGroupOverride_STATUS
+		err := originGroupOverride.AssignProperties_From_OriginGroupOverride_STATUS(source.OriginGroupOverride)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_OriginGroupOverride_STATUS() to populate field OriginGroupOverride")
+		}
+		parameters.OriginGroupOverride = &originGroupOverride
+	} else {
+		parameters.OriginGroupOverride = nil
+	}
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRouteConfigurationOverrideActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRouteConfigurationOverrideActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_RouteConfigurationOverrideActionParameters_STATUS populates the provided destination RouteConfigurationOverrideActionParameters_STATUS from our RouteConfigurationOverrideActionParameters_STATUS
+func (parameters *RouteConfigurationOverrideActionParameters_STATUS) AssignProperties_To_RouteConfigurationOverrideActionParameters_STATUS(destination *v20230501s.RouteConfigurationOverrideActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// CacheConfiguration
+	if parameters.CacheConfiguration != nil {
+		var cacheConfiguration v20230501s.CacheConfiguration_STATUS
+		err := parameters.CacheConfiguration.AssignProperties_To_CacheConfiguration_STATUS(&cacheConfiguration)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_CacheConfiguration_STATUS() to populate field CacheConfiguration")
+		}
+		destination.CacheConfiguration = &cacheConfiguration
+	} else {
+		destination.CacheConfiguration = nil
+	}
+
+	// OriginGroupOverride
+	if parameters.OriginGroupOverride != nil {
+		var originGroupOverride v20230501s.OriginGroupOverride_STATUS
+		err := parameters.OriginGroupOverride.AssignProperties_To_OriginGroupOverride_STATUS(&originGroupOverride)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_OriginGroupOverride_STATUS() to populate field OriginGroupOverride")
+		}
+		destination.OriginGroupOverride = &originGroupOverride
+	} else {
+		destination.OriginGroupOverride = nil
+	}
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForRouteConfigurationOverrideActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForRouteConfigurationOverrideActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.ServerPortMatchConditionParameters
@@ -1353,6 +13113,96 @@ type ServerPortMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_ServerPortMatchConditionParameters populates our ServerPortMatchConditionParameters from the provided source ServerPortMatchConditionParameters
+func (parameters *ServerPortMatchConditionParameters) AssignProperties_From_ServerPortMatchConditionParameters(source *v20230501s.ServerPortMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForServerPortMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForServerPortMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_ServerPortMatchConditionParameters populates the provided destination ServerPortMatchConditionParameters from our ServerPortMatchConditionParameters
+func (parameters *ServerPortMatchConditionParameters) AssignProperties_To_ServerPortMatchConditionParameters(destination *v20230501s.ServerPortMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForServerPortMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForServerPortMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.ServerPortMatchConditionParameters_STATUS
 // Defines the parameters for ServerPort match conditions
 type ServerPortMatchConditionParameters_STATUS struct {
@@ -1362,6 +13212,96 @@ type ServerPortMatchConditionParameters_STATUS struct {
 	PropertyBag     genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_ServerPortMatchConditionParameters_STATUS populates our ServerPortMatchConditionParameters_STATUS from the provided source ServerPortMatchConditionParameters_STATUS
+func (parameters *ServerPortMatchConditionParameters_STATUS) AssignProperties_From_ServerPortMatchConditionParameters_STATUS(source *v20230501s.ServerPortMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForServerPortMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForServerPortMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_ServerPortMatchConditionParameters_STATUS populates the provided destination ServerPortMatchConditionParameters_STATUS from our ServerPortMatchConditionParameters_STATUS
+func (parameters *ServerPortMatchConditionParameters_STATUS) AssignProperties_To_ServerPortMatchConditionParameters_STATUS(destination *v20230501s.ServerPortMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForServerPortMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForServerPortMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.SocketAddrMatchConditionParameters
@@ -1375,6 +13315,96 @@ type SocketAddrMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_SocketAddrMatchConditionParameters populates our SocketAddrMatchConditionParameters from the provided source SocketAddrMatchConditionParameters
+func (parameters *SocketAddrMatchConditionParameters) AssignProperties_From_SocketAddrMatchConditionParameters(source *v20230501s.SocketAddrMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForSocketAddrMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForSocketAddrMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_SocketAddrMatchConditionParameters populates the provided destination SocketAddrMatchConditionParameters from our SocketAddrMatchConditionParameters
+func (parameters *SocketAddrMatchConditionParameters) AssignProperties_To_SocketAddrMatchConditionParameters(destination *v20230501s.SocketAddrMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForSocketAddrMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForSocketAddrMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.SocketAddrMatchConditionParameters_STATUS
 // Defines the parameters for SocketAddress match conditions
 type SocketAddrMatchConditionParameters_STATUS struct {
@@ -1384,6 +13414,96 @@ type SocketAddrMatchConditionParameters_STATUS struct {
 	PropertyBag     genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_SocketAddrMatchConditionParameters_STATUS populates our SocketAddrMatchConditionParameters_STATUS from the provided source SocketAddrMatchConditionParameters_STATUS
+func (parameters *SocketAddrMatchConditionParameters_STATUS) AssignProperties_From_SocketAddrMatchConditionParameters_STATUS(source *v20230501s.SocketAddrMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForSocketAddrMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForSocketAddrMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_SocketAddrMatchConditionParameters_STATUS populates the provided destination SocketAddrMatchConditionParameters_STATUS from our SocketAddrMatchConditionParameters_STATUS
+func (parameters *SocketAddrMatchConditionParameters_STATUS) AssignProperties_To_SocketAddrMatchConditionParameters_STATUS(destination *v20230501s.SocketAddrMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForSocketAddrMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForSocketAddrMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.SslProtocolMatchConditionParameters
@@ -1397,6 +13517,96 @@ type SslProtocolMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_SslProtocolMatchConditionParameters populates our SslProtocolMatchConditionParameters from the provided source SslProtocolMatchConditionParameters
+func (parameters *SslProtocolMatchConditionParameters) AssignProperties_From_SslProtocolMatchConditionParameters(source *v20230501s.SslProtocolMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForSslProtocolMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForSslProtocolMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_SslProtocolMatchConditionParameters populates the provided destination SslProtocolMatchConditionParameters from our SslProtocolMatchConditionParameters
+func (parameters *SslProtocolMatchConditionParameters) AssignProperties_To_SslProtocolMatchConditionParameters(destination *v20230501s.SslProtocolMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForSslProtocolMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForSslProtocolMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.SslProtocolMatchConditionParameters_STATUS
 // Defines the parameters for SslProtocol match conditions
 type SslProtocolMatchConditionParameters_STATUS struct {
@@ -1406,6 +13616,96 @@ type SslProtocolMatchConditionParameters_STATUS struct {
 	PropertyBag     genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_SslProtocolMatchConditionParameters_STATUS populates our SslProtocolMatchConditionParameters_STATUS from the provided source SslProtocolMatchConditionParameters_STATUS
+func (parameters *SslProtocolMatchConditionParameters_STATUS) AssignProperties_From_SslProtocolMatchConditionParameters_STATUS(source *v20230501s.SslProtocolMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForSslProtocolMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForSslProtocolMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_SslProtocolMatchConditionParameters_STATUS populates the provided destination SslProtocolMatchConditionParameters_STATUS from our SslProtocolMatchConditionParameters_STATUS
+func (parameters *SslProtocolMatchConditionParameters_STATUS) AssignProperties_To_SslProtocolMatchConditionParameters_STATUS(destination *v20230501s.SslProtocolMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForSslProtocolMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForSslProtocolMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.UrlFileExtensionMatchConditionParameters
@@ -1419,6 +13719,96 @@ type UrlFileExtensionMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_UrlFileExtensionMatchConditionParameters populates our UrlFileExtensionMatchConditionParameters from the provided source UrlFileExtensionMatchConditionParameters
+func (parameters *UrlFileExtensionMatchConditionParameters) AssignProperties_From_UrlFileExtensionMatchConditionParameters(source *v20230501s.UrlFileExtensionMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlFileExtensionMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlFileExtensionMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlFileExtensionMatchConditionParameters populates the provided destination UrlFileExtensionMatchConditionParameters from our UrlFileExtensionMatchConditionParameters
+func (parameters *UrlFileExtensionMatchConditionParameters) AssignProperties_To_UrlFileExtensionMatchConditionParameters(destination *v20230501s.UrlFileExtensionMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlFileExtensionMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlFileExtensionMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.UrlFileExtensionMatchConditionParameters_STATUS
 // Defines the parameters for UrlFileExtension match conditions
 type UrlFileExtensionMatchConditionParameters_STATUS struct {
@@ -1428,6 +13818,96 @@ type UrlFileExtensionMatchConditionParameters_STATUS struct {
 	PropertyBag     genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_UrlFileExtensionMatchConditionParameters_STATUS populates our UrlFileExtensionMatchConditionParameters_STATUS from the provided source UrlFileExtensionMatchConditionParameters_STATUS
+func (parameters *UrlFileExtensionMatchConditionParameters_STATUS) AssignProperties_From_UrlFileExtensionMatchConditionParameters_STATUS(source *v20230501s.UrlFileExtensionMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlFileExtensionMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlFileExtensionMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlFileExtensionMatchConditionParameters_STATUS populates the provided destination UrlFileExtensionMatchConditionParameters_STATUS from our UrlFileExtensionMatchConditionParameters_STATUS
+func (parameters *UrlFileExtensionMatchConditionParameters_STATUS) AssignProperties_To_UrlFileExtensionMatchConditionParameters_STATUS(destination *v20230501s.UrlFileExtensionMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlFileExtensionMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlFileExtensionMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.UrlFileNameMatchConditionParameters
@@ -1441,6 +13921,96 @@ type UrlFileNameMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_UrlFileNameMatchConditionParameters populates our UrlFileNameMatchConditionParameters from the provided source UrlFileNameMatchConditionParameters
+func (parameters *UrlFileNameMatchConditionParameters) AssignProperties_From_UrlFileNameMatchConditionParameters(source *v20230501s.UrlFileNameMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlFileNameMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlFileNameMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlFileNameMatchConditionParameters populates the provided destination UrlFileNameMatchConditionParameters from our UrlFileNameMatchConditionParameters
+func (parameters *UrlFileNameMatchConditionParameters) AssignProperties_To_UrlFileNameMatchConditionParameters(destination *v20230501s.UrlFileNameMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlFileNameMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlFileNameMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.UrlFileNameMatchConditionParameters_STATUS
 // Defines the parameters for UrlFilename match conditions
 type UrlFileNameMatchConditionParameters_STATUS struct {
@@ -1450,6 +14020,96 @@ type UrlFileNameMatchConditionParameters_STATUS struct {
 	PropertyBag     genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_UrlFileNameMatchConditionParameters_STATUS populates our UrlFileNameMatchConditionParameters_STATUS from the provided source UrlFileNameMatchConditionParameters_STATUS
+func (parameters *UrlFileNameMatchConditionParameters_STATUS) AssignProperties_From_UrlFileNameMatchConditionParameters_STATUS(source *v20230501s.UrlFileNameMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlFileNameMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlFileNameMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlFileNameMatchConditionParameters_STATUS populates the provided destination UrlFileNameMatchConditionParameters_STATUS from our UrlFileNameMatchConditionParameters_STATUS
+func (parameters *UrlFileNameMatchConditionParameters_STATUS) AssignProperties_To_UrlFileNameMatchConditionParameters_STATUS(destination *v20230501s.UrlFileNameMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlFileNameMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlFileNameMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.UrlPathMatchConditionParameters
@@ -1463,6 +14123,96 @@ type UrlPathMatchConditionParameters struct {
 	TypeName        *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_UrlPathMatchConditionParameters populates our UrlPathMatchConditionParameters from the provided source UrlPathMatchConditionParameters
+func (parameters *UrlPathMatchConditionParameters) AssignProperties_From_UrlPathMatchConditionParameters(source *v20230501s.UrlPathMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlPathMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlPathMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlPathMatchConditionParameters populates the provided destination UrlPathMatchConditionParameters from our UrlPathMatchConditionParameters
+func (parameters *UrlPathMatchConditionParameters) AssignProperties_To_UrlPathMatchConditionParameters(destination *v20230501s.UrlPathMatchConditionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlPathMatchConditionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlPathMatchConditionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.UrlPathMatchConditionParameters_STATUS
 // Defines the parameters for UrlPath match conditions
 type UrlPathMatchConditionParameters_STATUS struct {
@@ -1472,6 +14222,96 @@ type UrlPathMatchConditionParameters_STATUS struct {
 	PropertyBag     genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	Transforms      []string               `json:"transforms,omitempty"`
 	TypeName        *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_UrlPathMatchConditionParameters_STATUS populates our UrlPathMatchConditionParameters_STATUS from the provided source UrlPathMatchConditionParameters_STATUS
+func (parameters *UrlPathMatchConditionParameters_STATUS) AssignProperties_From_UrlPathMatchConditionParameters_STATUS(source *v20230501s.UrlPathMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// MatchValues
+	parameters.MatchValues = genruntime.CloneSliceOfString(source.MatchValues)
+
+	// NegateCondition
+	if source.NegateCondition != nil {
+		negateCondition := *source.NegateCondition
+		parameters.NegateCondition = &negateCondition
+	} else {
+		parameters.NegateCondition = nil
+	}
+
+	// Operator
+	parameters.Operator = genruntime.ClonePointerToString(source.Operator)
+
+	// Transforms
+	parameters.Transforms = genruntime.CloneSliceOfString(source.Transforms)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlPathMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlPathMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlPathMatchConditionParameters_STATUS populates the provided destination UrlPathMatchConditionParameters_STATUS from our UrlPathMatchConditionParameters_STATUS
+func (parameters *UrlPathMatchConditionParameters_STATUS) AssignProperties_To_UrlPathMatchConditionParameters_STATUS(destination *v20230501s.UrlPathMatchConditionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// MatchValues
+	destination.MatchValues = genruntime.CloneSliceOfString(parameters.MatchValues)
+
+	// NegateCondition
+	if parameters.NegateCondition != nil {
+		negateCondition := *parameters.NegateCondition
+		destination.NegateCondition = &negateCondition
+	} else {
+		destination.NegateCondition = nil
+	}
+
+	// Operator
+	destination.Operator = genruntime.ClonePointerToString(parameters.Operator)
+
+	// Transforms
+	destination.Transforms = genruntime.CloneSliceOfString(parameters.Transforms)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlPathMatchConditionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlPathMatchConditionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.UrlRedirectActionParameters
@@ -1487,6 +14327,98 @@ type UrlRedirectActionParameters struct {
 	TypeName            *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_UrlRedirectActionParameters populates our UrlRedirectActionParameters from the provided source UrlRedirectActionParameters
+func (parameters *UrlRedirectActionParameters) AssignProperties_From_UrlRedirectActionParameters(source *v20230501s.UrlRedirectActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// CustomFragment
+	parameters.CustomFragment = genruntime.ClonePointerToString(source.CustomFragment)
+
+	// CustomHostname
+	parameters.CustomHostname = genruntime.ClonePointerToString(source.CustomHostname)
+
+	// CustomPath
+	parameters.CustomPath = genruntime.ClonePointerToString(source.CustomPath)
+
+	// CustomQueryString
+	parameters.CustomQueryString = genruntime.ClonePointerToString(source.CustomQueryString)
+
+	// DestinationProtocol
+	parameters.DestinationProtocol = genruntime.ClonePointerToString(source.DestinationProtocol)
+
+	// RedirectType
+	parameters.RedirectType = genruntime.ClonePointerToString(source.RedirectType)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRedirectActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlRedirectActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlRedirectActionParameters populates the provided destination UrlRedirectActionParameters from our UrlRedirectActionParameters
+func (parameters *UrlRedirectActionParameters) AssignProperties_To_UrlRedirectActionParameters(destination *v20230501s.UrlRedirectActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// CustomFragment
+	destination.CustomFragment = genruntime.ClonePointerToString(parameters.CustomFragment)
+
+	// CustomHostname
+	destination.CustomHostname = genruntime.ClonePointerToString(parameters.CustomHostname)
+
+	// CustomPath
+	destination.CustomPath = genruntime.ClonePointerToString(parameters.CustomPath)
+
+	// CustomQueryString
+	destination.CustomQueryString = genruntime.ClonePointerToString(parameters.CustomQueryString)
+
+	// DestinationProtocol
+	destination.DestinationProtocol = genruntime.ClonePointerToString(parameters.DestinationProtocol)
+
+	// RedirectType
+	destination.RedirectType = genruntime.ClonePointerToString(parameters.RedirectType)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRedirectActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlRedirectActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.UrlRedirectActionParameters_STATUS
 // Defines the parameters for the url redirect action.
 type UrlRedirectActionParameters_STATUS struct {
@@ -1500,6 +14432,98 @@ type UrlRedirectActionParameters_STATUS struct {
 	TypeName            *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_UrlRedirectActionParameters_STATUS populates our UrlRedirectActionParameters_STATUS from the provided source UrlRedirectActionParameters_STATUS
+func (parameters *UrlRedirectActionParameters_STATUS) AssignProperties_From_UrlRedirectActionParameters_STATUS(source *v20230501s.UrlRedirectActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// CustomFragment
+	parameters.CustomFragment = genruntime.ClonePointerToString(source.CustomFragment)
+
+	// CustomHostname
+	parameters.CustomHostname = genruntime.ClonePointerToString(source.CustomHostname)
+
+	// CustomPath
+	parameters.CustomPath = genruntime.ClonePointerToString(source.CustomPath)
+
+	// CustomQueryString
+	parameters.CustomQueryString = genruntime.ClonePointerToString(source.CustomQueryString)
+
+	// DestinationProtocol
+	parameters.DestinationProtocol = genruntime.ClonePointerToString(source.DestinationProtocol)
+
+	// RedirectType
+	parameters.RedirectType = genruntime.ClonePointerToString(source.RedirectType)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRedirectActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlRedirectActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlRedirectActionParameters_STATUS populates the provided destination UrlRedirectActionParameters_STATUS from our UrlRedirectActionParameters_STATUS
+func (parameters *UrlRedirectActionParameters_STATUS) AssignProperties_To_UrlRedirectActionParameters_STATUS(destination *v20230501s.UrlRedirectActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// CustomFragment
+	destination.CustomFragment = genruntime.ClonePointerToString(parameters.CustomFragment)
+
+	// CustomHostname
+	destination.CustomHostname = genruntime.ClonePointerToString(parameters.CustomHostname)
+
+	// CustomPath
+	destination.CustomPath = genruntime.ClonePointerToString(parameters.CustomPath)
+
+	// CustomQueryString
+	destination.CustomQueryString = genruntime.ClonePointerToString(parameters.CustomQueryString)
+
+	// DestinationProtocol
+	destination.DestinationProtocol = genruntime.ClonePointerToString(parameters.DestinationProtocol)
+
+	// RedirectType
+	destination.RedirectType = genruntime.ClonePointerToString(parameters.RedirectType)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRedirectActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlRedirectActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.UrlRewriteActionParameters
 // Defines the parameters for the url rewrite action.
 type UrlRewriteActionParameters struct {
@@ -1508,6 +14532,90 @@ type UrlRewriteActionParameters struct {
 	PropertyBag           genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 	SourcePattern         *string                `json:"sourcePattern,omitempty"`
 	TypeName              *string                `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_UrlRewriteActionParameters populates our UrlRewriteActionParameters from the provided source UrlRewriteActionParameters
+func (parameters *UrlRewriteActionParameters) AssignProperties_From_UrlRewriteActionParameters(source *v20230501s.UrlRewriteActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Destination
+	parameters.Destination = genruntime.ClonePointerToString(source.Destination)
+
+	// PreserveUnmatchedPath
+	if source.PreserveUnmatchedPath != nil {
+		preserveUnmatchedPath := *source.PreserveUnmatchedPath
+		parameters.PreserveUnmatchedPath = &preserveUnmatchedPath
+	} else {
+		parameters.PreserveUnmatchedPath = nil
+	}
+
+	// SourcePattern
+	parameters.SourcePattern = genruntime.ClonePointerToString(source.SourcePattern)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRewriteActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlRewriteActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlRewriteActionParameters populates the provided destination UrlRewriteActionParameters from our UrlRewriteActionParameters
+func (parameters *UrlRewriteActionParameters) AssignProperties_To_UrlRewriteActionParameters(destination *v20230501s.UrlRewriteActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// Destination
+	destination.Destination = genruntime.ClonePointerToString(parameters.Destination)
+
+	// PreserveUnmatchedPath
+	if parameters.PreserveUnmatchedPath != nil {
+		preserveUnmatchedPath := *parameters.PreserveUnmatchedPath
+		destination.PreserveUnmatchedPath = &preserveUnmatchedPath
+	} else {
+		destination.PreserveUnmatchedPath = nil
+	}
+
+	// SourcePattern
+	destination.SourcePattern = genruntime.ClonePointerToString(parameters.SourcePattern)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRewriteActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlRewriteActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.UrlRewriteActionParameters_STATUS
@@ -1520,6 +14628,90 @@ type UrlRewriteActionParameters_STATUS struct {
 	TypeName              *string                `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_UrlRewriteActionParameters_STATUS populates our UrlRewriteActionParameters_STATUS from the provided source UrlRewriteActionParameters_STATUS
+func (parameters *UrlRewriteActionParameters_STATUS) AssignProperties_From_UrlRewriteActionParameters_STATUS(source *v20230501s.UrlRewriteActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Destination
+	parameters.Destination = genruntime.ClonePointerToString(source.Destination)
+
+	// PreserveUnmatchedPath
+	if source.PreserveUnmatchedPath != nil {
+		preserveUnmatchedPath := *source.PreserveUnmatchedPath
+		parameters.PreserveUnmatchedPath = &preserveUnmatchedPath
+	} else {
+		parameters.PreserveUnmatchedPath = nil
+	}
+
+	// SourcePattern
+	parameters.SourcePattern = genruntime.ClonePointerToString(source.SourcePattern)
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRewriteActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlRewriteActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlRewriteActionParameters_STATUS populates the provided destination UrlRewriteActionParameters_STATUS from our UrlRewriteActionParameters_STATUS
+func (parameters *UrlRewriteActionParameters_STATUS) AssignProperties_To_UrlRewriteActionParameters_STATUS(destination *v20230501s.UrlRewriteActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// Destination
+	destination.Destination = genruntime.ClonePointerToString(parameters.Destination)
+
+	// PreserveUnmatchedPath
+	if parameters.PreserveUnmatchedPath != nil {
+		preserveUnmatchedPath := *parameters.PreserveUnmatchedPath
+		destination.PreserveUnmatchedPath = &preserveUnmatchedPath
+	} else {
+		destination.PreserveUnmatchedPath = nil
+	}
+
+	// SourcePattern
+	destination.SourcePattern = genruntime.ClonePointerToString(parameters.SourcePattern)
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlRewriteActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlRewriteActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.UrlSigningActionParameters
 // Defines the parameters for the Url Signing action.
 type UrlSigningActionParameters struct {
@@ -1529,6 +14721,104 @@ type UrlSigningActionParameters struct {
 	TypeName              *string                     `json:"typeName,omitempty"`
 }
 
+// AssignProperties_From_UrlSigningActionParameters populates our UrlSigningActionParameters from the provided source UrlSigningActionParameters
+func (parameters *UrlSigningActionParameters) AssignProperties_From_UrlSigningActionParameters(source *v20230501s.UrlSigningActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Algorithm
+	parameters.Algorithm = genruntime.ClonePointerToString(source.Algorithm)
+
+	// ParameterNameOverride
+	if source.ParameterNameOverride != nil {
+		parameterNameOverrideList := make([]UrlSigningParamIdentifier, len(source.ParameterNameOverride))
+		for parameterNameOverrideIndex, parameterNameOverrideItem := range source.ParameterNameOverride {
+			// Shadow the loop variable to avoid aliasing
+			parameterNameOverrideItem := parameterNameOverrideItem
+			var parameterNameOverride UrlSigningParamIdentifier
+			err := parameterNameOverride.AssignProperties_From_UrlSigningParamIdentifier(&parameterNameOverrideItem)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_From_UrlSigningParamIdentifier() to populate field ParameterNameOverride")
+			}
+			parameterNameOverrideList[parameterNameOverrideIndex] = parameterNameOverride
+		}
+		parameters.ParameterNameOverride = parameterNameOverrideList
+	} else {
+		parameters.ParameterNameOverride = nil
+	}
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlSigningActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlSigningActionParameters populates the provided destination UrlSigningActionParameters from our UrlSigningActionParameters
+func (parameters *UrlSigningActionParameters) AssignProperties_To_UrlSigningActionParameters(destination *v20230501s.UrlSigningActionParameters) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// Algorithm
+	destination.Algorithm = genruntime.ClonePointerToString(parameters.Algorithm)
+
+	// ParameterNameOverride
+	if parameters.ParameterNameOverride != nil {
+		parameterNameOverrideList := make([]v20230501s.UrlSigningParamIdentifier, len(parameters.ParameterNameOverride))
+		for parameterNameOverrideIndex, parameterNameOverrideItem := range parameters.ParameterNameOverride {
+			// Shadow the loop variable to avoid aliasing
+			parameterNameOverrideItem := parameterNameOverrideItem
+			var parameterNameOverride v20230501s.UrlSigningParamIdentifier
+			err := parameterNameOverrideItem.AssignProperties_To_UrlSigningParamIdentifier(&parameterNameOverride)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_To_UrlSigningParamIdentifier() to populate field ParameterNameOverride")
+			}
+			parameterNameOverrideList[parameterNameOverrideIndex] = parameterNameOverride
+		}
+		destination.ParameterNameOverride = parameterNameOverrideList
+	} else {
+		destination.ParameterNameOverride = nil
+	}
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningActionParameters interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlSigningActionParameters); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.UrlSigningActionParameters_STATUS
 // Defines the parameters for the Url Signing action.
 type UrlSigningActionParameters_STATUS struct {
@@ -1536,6 +14826,374 @@ type UrlSigningActionParameters_STATUS struct {
 	ParameterNameOverride []UrlSigningParamIdentifier_STATUS `json:"parameterNameOverride,omitempty"`
 	PropertyBag           genruntime.PropertyBag             `json:"$propertyBag,omitempty"`
 	TypeName              *string                            `json:"typeName,omitempty"`
+}
+
+// AssignProperties_From_UrlSigningActionParameters_STATUS populates our UrlSigningActionParameters_STATUS from the provided source UrlSigningActionParameters_STATUS
+func (parameters *UrlSigningActionParameters_STATUS) AssignProperties_From_UrlSigningActionParameters_STATUS(source *v20230501s.UrlSigningActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// Algorithm
+	parameters.Algorithm = genruntime.ClonePointerToString(source.Algorithm)
+
+	// ParameterNameOverride
+	if source.ParameterNameOverride != nil {
+		parameterNameOverrideList := make([]UrlSigningParamIdentifier_STATUS, len(source.ParameterNameOverride))
+		for parameterNameOverrideIndex, parameterNameOverrideItem := range source.ParameterNameOverride {
+			// Shadow the loop variable to avoid aliasing
+			parameterNameOverrideItem := parameterNameOverrideItem
+			var parameterNameOverride UrlSigningParamIdentifier_STATUS
+			err := parameterNameOverride.AssignProperties_From_UrlSigningParamIdentifier_STATUS(&parameterNameOverrideItem)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_From_UrlSigningParamIdentifier_STATUS() to populate field ParameterNameOverride")
+			}
+			parameterNameOverrideList[parameterNameOverrideIndex] = parameterNameOverride
+		}
+		parameters.ParameterNameOverride = parameterNameOverrideList
+	} else {
+		parameters.ParameterNameOverride = nil
+	}
+
+	// TypeName
+	parameters.TypeName = genruntime.ClonePointerToString(source.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		parameters.PropertyBag = propertyBag
+	} else {
+		parameters.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlSigningActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlSigningActionParameters_STATUS populates the provided destination UrlSigningActionParameters_STATUS from our UrlSigningActionParameters_STATUS
+func (parameters *UrlSigningActionParameters_STATUS) AssignProperties_To_UrlSigningActionParameters_STATUS(destination *v20230501s.UrlSigningActionParameters_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(parameters.PropertyBag)
+
+	// Algorithm
+	destination.Algorithm = genruntime.ClonePointerToString(parameters.Algorithm)
+
+	// ParameterNameOverride
+	if parameters.ParameterNameOverride != nil {
+		parameterNameOverrideList := make([]v20230501s.UrlSigningParamIdentifier_STATUS, len(parameters.ParameterNameOverride))
+		for parameterNameOverrideIndex, parameterNameOverrideItem := range parameters.ParameterNameOverride {
+			// Shadow the loop variable to avoid aliasing
+			parameterNameOverrideItem := parameterNameOverrideItem
+			var parameterNameOverride v20230501s.UrlSigningParamIdentifier_STATUS
+			err := parameterNameOverrideItem.AssignProperties_To_UrlSigningParamIdentifier_STATUS(&parameterNameOverride)
+			if err != nil {
+				return errors.Wrap(err, "calling AssignProperties_To_UrlSigningParamIdentifier_STATUS() to populate field ParameterNameOverride")
+			}
+			parameterNameOverrideList[parameterNameOverrideIndex] = parameterNameOverride
+		}
+		destination.ParameterNameOverride = parameterNameOverrideList
+	} else {
+		destination.ParameterNameOverride = nil
+	}
+
+	// TypeName
+	destination.TypeName = genruntime.ClonePointerToString(parameters.TypeName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningActionParameters_STATUS interface (if implemented) to customize the conversion
+	var parametersAsAny any = parameters
+	if augmentedParameters, ok := parametersAsAny.(augmentConversionForUrlSigningActionParameters_STATUS); ok {
+		err := augmentedParameters.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+type augmentConversionForCacheExpirationActionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.CacheExpirationActionParameters) error
+	AssignPropertiesTo(dst *v20230501s.CacheExpirationActionParameters) error
+}
+
+type augmentConversionForCacheExpirationActionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.CacheExpirationActionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.CacheExpirationActionParameters_STATUS) error
+}
+
+type augmentConversionForCacheKeyQueryStringActionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.CacheKeyQueryStringActionParameters) error
+	AssignPropertiesTo(dst *v20230501s.CacheKeyQueryStringActionParameters) error
+}
+
+type augmentConversionForCacheKeyQueryStringActionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.CacheKeyQueryStringActionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.CacheKeyQueryStringActionParameters_STATUS) error
+}
+
+type augmentConversionForClientPortMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.ClientPortMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.ClientPortMatchConditionParameters) error
+}
+
+type augmentConversionForClientPortMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.ClientPortMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.ClientPortMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForCookiesMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.CookiesMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.CookiesMatchConditionParameters) error
+}
+
+type augmentConversionForCookiesMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.CookiesMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.CookiesMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForHeaderActionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.HeaderActionParameters) error
+	AssignPropertiesTo(dst *v20230501s.HeaderActionParameters) error
+}
+
+type augmentConversionForHeaderActionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.HeaderActionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.HeaderActionParameters_STATUS) error
+}
+
+type augmentConversionForHostNameMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.HostNameMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.HostNameMatchConditionParameters) error
+}
+
+type augmentConversionForHostNameMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.HostNameMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.HostNameMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForHttpVersionMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.HttpVersionMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.HttpVersionMatchConditionParameters) error
+}
+
+type augmentConversionForHttpVersionMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.HttpVersionMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.HttpVersionMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForIsDeviceMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.IsDeviceMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.IsDeviceMatchConditionParameters) error
+}
+
+type augmentConversionForIsDeviceMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.IsDeviceMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.IsDeviceMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForOriginGroupOverrideActionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.OriginGroupOverrideActionParameters) error
+	AssignPropertiesTo(dst *v20230501s.OriginGroupOverrideActionParameters) error
+}
+
+type augmentConversionForOriginGroupOverrideActionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.OriginGroupOverrideActionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.OriginGroupOverrideActionParameters_STATUS) error
+}
+
+type augmentConversionForPostArgsMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.PostArgsMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.PostArgsMatchConditionParameters) error
+}
+
+type augmentConversionForPostArgsMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.PostArgsMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.PostArgsMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForQueryStringMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.QueryStringMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.QueryStringMatchConditionParameters) error
+}
+
+type augmentConversionForQueryStringMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.QueryStringMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.QueryStringMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForRemoteAddressMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.RemoteAddressMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.RemoteAddressMatchConditionParameters) error
+}
+
+type augmentConversionForRemoteAddressMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.RemoteAddressMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.RemoteAddressMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForRequestBodyMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.RequestBodyMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.RequestBodyMatchConditionParameters) error
+}
+
+type augmentConversionForRequestBodyMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.RequestBodyMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.RequestBodyMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForRequestHeaderMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.RequestHeaderMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.RequestHeaderMatchConditionParameters) error
+}
+
+type augmentConversionForRequestHeaderMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.RequestHeaderMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.RequestHeaderMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForRequestMethodMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.RequestMethodMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.RequestMethodMatchConditionParameters) error
+}
+
+type augmentConversionForRequestMethodMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.RequestMethodMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.RequestMethodMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForRequestSchemeMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.RequestSchemeMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.RequestSchemeMatchConditionParameters) error
+}
+
+type augmentConversionForRequestSchemeMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.RequestSchemeMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.RequestSchemeMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForRequestUriMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.RequestUriMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.RequestUriMatchConditionParameters) error
+}
+
+type augmentConversionForRequestUriMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.RequestUriMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.RequestUriMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForRouteConfigurationOverrideActionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.RouteConfigurationOverrideActionParameters) error
+	AssignPropertiesTo(dst *v20230501s.RouteConfigurationOverrideActionParameters) error
+}
+
+type augmentConversionForRouteConfigurationOverrideActionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.RouteConfigurationOverrideActionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.RouteConfigurationOverrideActionParameters_STATUS) error
+}
+
+type augmentConversionForServerPortMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.ServerPortMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.ServerPortMatchConditionParameters) error
+}
+
+type augmentConversionForServerPortMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.ServerPortMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.ServerPortMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForSocketAddrMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.SocketAddrMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.SocketAddrMatchConditionParameters) error
+}
+
+type augmentConversionForSocketAddrMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.SocketAddrMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.SocketAddrMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForSslProtocolMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.SslProtocolMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.SslProtocolMatchConditionParameters) error
+}
+
+type augmentConversionForSslProtocolMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.SslProtocolMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.SslProtocolMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForUrlFileExtensionMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.UrlFileExtensionMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.UrlFileExtensionMatchConditionParameters) error
+}
+
+type augmentConversionForUrlFileExtensionMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.UrlFileExtensionMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.UrlFileExtensionMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForUrlFileNameMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.UrlFileNameMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.UrlFileNameMatchConditionParameters) error
+}
+
+type augmentConversionForUrlFileNameMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.UrlFileNameMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.UrlFileNameMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForUrlPathMatchConditionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.UrlPathMatchConditionParameters) error
+	AssignPropertiesTo(dst *v20230501s.UrlPathMatchConditionParameters) error
+}
+
+type augmentConversionForUrlPathMatchConditionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.UrlPathMatchConditionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.UrlPathMatchConditionParameters_STATUS) error
+}
+
+type augmentConversionForUrlRedirectActionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.UrlRedirectActionParameters) error
+	AssignPropertiesTo(dst *v20230501s.UrlRedirectActionParameters) error
+}
+
+type augmentConversionForUrlRedirectActionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.UrlRedirectActionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.UrlRedirectActionParameters_STATUS) error
+}
+
+type augmentConversionForUrlRewriteActionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.UrlRewriteActionParameters) error
+	AssignPropertiesTo(dst *v20230501s.UrlRewriteActionParameters) error
+}
+
+type augmentConversionForUrlRewriteActionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.UrlRewriteActionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.UrlRewriteActionParameters_STATUS) error
+}
+
+type augmentConversionForUrlSigningActionParameters interface {
+	AssignPropertiesFrom(src *v20230501s.UrlSigningActionParameters) error
+	AssignPropertiesTo(dst *v20230501s.UrlSigningActionParameters) error
+}
+
+type augmentConversionForUrlSigningActionParameters_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.UrlSigningActionParameters_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.UrlSigningActionParameters_STATUS) error
 }
 
 // Storage version of v1api20210601.CacheConfiguration
@@ -1549,6 +15207,86 @@ type CacheConfiguration struct {
 	QueryStringCachingBehavior *string                `json:"queryStringCachingBehavior,omitempty"`
 }
 
+// AssignProperties_From_CacheConfiguration populates our CacheConfiguration from the provided source CacheConfiguration
+func (configuration *CacheConfiguration) AssignProperties_From_CacheConfiguration(source *v20230501s.CacheConfiguration) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// CacheBehavior
+	configuration.CacheBehavior = genruntime.ClonePointerToString(source.CacheBehavior)
+
+	// CacheDuration
+	configuration.CacheDuration = genruntime.ClonePointerToString(source.CacheDuration)
+
+	// IsCompressionEnabled
+	configuration.IsCompressionEnabled = genruntime.ClonePointerToString(source.IsCompressionEnabled)
+
+	// QueryParameters
+	configuration.QueryParameters = genruntime.ClonePointerToString(source.QueryParameters)
+
+	// QueryStringCachingBehavior
+	configuration.QueryStringCachingBehavior = genruntime.ClonePointerToString(source.QueryStringCachingBehavior)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		configuration.PropertyBag = propertyBag
+	} else {
+		configuration.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCacheConfiguration interface (if implemented) to customize the conversion
+	var configurationAsAny any = configuration
+	if augmentedConfiguration, ok := configurationAsAny.(augmentConversionForCacheConfiguration); ok {
+		err := augmentedConfiguration.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_CacheConfiguration populates the provided destination CacheConfiguration from our CacheConfiguration
+func (configuration *CacheConfiguration) AssignProperties_To_CacheConfiguration(destination *v20230501s.CacheConfiguration) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(configuration.PropertyBag)
+
+	// CacheBehavior
+	destination.CacheBehavior = genruntime.ClonePointerToString(configuration.CacheBehavior)
+
+	// CacheDuration
+	destination.CacheDuration = genruntime.ClonePointerToString(configuration.CacheDuration)
+
+	// IsCompressionEnabled
+	destination.IsCompressionEnabled = genruntime.ClonePointerToString(configuration.IsCompressionEnabled)
+
+	// QueryParameters
+	destination.QueryParameters = genruntime.ClonePointerToString(configuration.QueryParameters)
+
+	// QueryStringCachingBehavior
+	destination.QueryStringCachingBehavior = genruntime.ClonePointerToString(configuration.QueryStringCachingBehavior)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCacheConfiguration interface (if implemented) to customize the conversion
+	var configurationAsAny any = configuration
+	if augmentedConfiguration, ok := configurationAsAny.(augmentConversionForCacheConfiguration); ok {
+		err := augmentedConfiguration.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.CacheConfiguration_STATUS
 // Caching settings for a caching-type route. To disable caching, do not provide a cacheConfiguration object.
 type CacheConfiguration_STATUS struct {
@@ -1560,12 +15298,172 @@ type CacheConfiguration_STATUS struct {
 	QueryStringCachingBehavior *string                `json:"queryStringCachingBehavior,omitempty"`
 }
 
+// AssignProperties_From_CacheConfiguration_STATUS populates our CacheConfiguration_STATUS from the provided source CacheConfiguration_STATUS
+func (configuration *CacheConfiguration_STATUS) AssignProperties_From_CacheConfiguration_STATUS(source *v20230501s.CacheConfiguration_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// CacheBehavior
+	configuration.CacheBehavior = genruntime.ClonePointerToString(source.CacheBehavior)
+
+	// CacheDuration
+	configuration.CacheDuration = genruntime.ClonePointerToString(source.CacheDuration)
+
+	// IsCompressionEnabled
+	configuration.IsCompressionEnabled = genruntime.ClonePointerToString(source.IsCompressionEnabled)
+
+	// QueryParameters
+	configuration.QueryParameters = genruntime.ClonePointerToString(source.QueryParameters)
+
+	// QueryStringCachingBehavior
+	configuration.QueryStringCachingBehavior = genruntime.ClonePointerToString(source.QueryStringCachingBehavior)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		configuration.PropertyBag = propertyBag
+	} else {
+		configuration.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCacheConfiguration_STATUS interface (if implemented) to customize the conversion
+	var configurationAsAny any = configuration
+	if augmentedConfiguration, ok := configurationAsAny.(augmentConversionForCacheConfiguration_STATUS); ok {
+		err := augmentedConfiguration.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_CacheConfiguration_STATUS populates the provided destination CacheConfiguration_STATUS from our CacheConfiguration_STATUS
+func (configuration *CacheConfiguration_STATUS) AssignProperties_To_CacheConfiguration_STATUS(destination *v20230501s.CacheConfiguration_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(configuration.PropertyBag)
+
+	// CacheBehavior
+	destination.CacheBehavior = genruntime.ClonePointerToString(configuration.CacheBehavior)
+
+	// CacheDuration
+	destination.CacheDuration = genruntime.ClonePointerToString(configuration.CacheDuration)
+
+	// IsCompressionEnabled
+	destination.IsCompressionEnabled = genruntime.ClonePointerToString(configuration.IsCompressionEnabled)
+
+	// QueryParameters
+	destination.QueryParameters = genruntime.ClonePointerToString(configuration.QueryParameters)
+
+	// QueryStringCachingBehavior
+	destination.QueryStringCachingBehavior = genruntime.ClonePointerToString(configuration.QueryStringCachingBehavior)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForCacheConfiguration_STATUS interface (if implemented) to customize the conversion
+	var configurationAsAny any = configuration
+	if augmentedConfiguration, ok := configurationAsAny.(augmentConversionForCacheConfiguration_STATUS); ok {
+		err := augmentedConfiguration.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.OriginGroupOverride
 // Defines the parameters for the origin group override configuration.
 type OriginGroupOverride struct {
 	ForwardingProtocol *string                `json:"forwardingProtocol,omitempty"`
 	OriginGroup        *ResourceReference     `json:"originGroup,omitempty"`
 	PropertyBag        genruntime.PropertyBag `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_OriginGroupOverride populates our OriginGroupOverride from the provided source OriginGroupOverride
+func (override *OriginGroupOverride) AssignProperties_From_OriginGroupOverride(source *v20230501s.OriginGroupOverride) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// ForwardingProtocol
+	override.ForwardingProtocol = genruntime.ClonePointerToString(source.ForwardingProtocol)
+
+	// OriginGroup
+	if source.OriginGroup != nil {
+		var originGroup ResourceReference
+		err := originGroup.AssignProperties_From_ResourceReference(source.OriginGroup)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_ResourceReference() to populate field OriginGroup")
+		}
+		override.OriginGroup = &originGroup
+	} else {
+		override.OriginGroup = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		override.PropertyBag = propertyBag
+	} else {
+		override.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForOriginGroupOverride interface (if implemented) to customize the conversion
+	var overrideAsAny any = override
+	if augmentedOverride, ok := overrideAsAny.(augmentConversionForOriginGroupOverride); ok {
+		err := augmentedOverride.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_OriginGroupOverride populates the provided destination OriginGroupOverride from our OriginGroupOverride
+func (override *OriginGroupOverride) AssignProperties_To_OriginGroupOverride(destination *v20230501s.OriginGroupOverride) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(override.PropertyBag)
+
+	// ForwardingProtocol
+	destination.ForwardingProtocol = genruntime.ClonePointerToString(override.ForwardingProtocol)
+
+	// OriginGroup
+	if override.OriginGroup != nil {
+		var originGroup v20230501s.ResourceReference
+		err := override.OriginGroup.AssignProperties_To_ResourceReference(&originGroup)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_ResourceReference() to populate field OriginGroup")
+		}
+		destination.OriginGroup = &originGroup
+	} else {
+		destination.OriginGroup = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForOriginGroupOverride interface (if implemented) to customize the conversion
+	var overrideAsAny any = override
+	if augmentedOverride, ok := overrideAsAny.(augmentConversionForOriginGroupOverride); ok {
+		err := augmentedOverride.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
 }
 
 // Storage version of v1api20210601.OriginGroupOverride_STATUS
@@ -1576,6 +15474,86 @@ type OriginGroupOverride_STATUS struct {
 	PropertyBag        genruntime.PropertyBag    `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_OriginGroupOverride_STATUS populates our OriginGroupOverride_STATUS from the provided source OriginGroupOverride_STATUS
+func (override *OriginGroupOverride_STATUS) AssignProperties_From_OriginGroupOverride_STATUS(source *v20230501s.OriginGroupOverride_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// ForwardingProtocol
+	override.ForwardingProtocol = genruntime.ClonePointerToString(source.ForwardingProtocol)
+
+	// OriginGroup
+	if source.OriginGroup != nil {
+		var originGroup ResourceReference_STATUS
+		err := originGroup.AssignProperties_From_ResourceReference_STATUS(source.OriginGroup)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_From_ResourceReference_STATUS() to populate field OriginGroup")
+		}
+		override.OriginGroup = &originGroup
+	} else {
+		override.OriginGroup = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		override.PropertyBag = propertyBag
+	} else {
+		override.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForOriginGroupOverride_STATUS interface (if implemented) to customize the conversion
+	var overrideAsAny any = override
+	if augmentedOverride, ok := overrideAsAny.(augmentConversionForOriginGroupOverride_STATUS); ok {
+		err := augmentedOverride.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_OriginGroupOverride_STATUS populates the provided destination OriginGroupOverride_STATUS from our OriginGroupOverride_STATUS
+func (override *OriginGroupOverride_STATUS) AssignProperties_To_OriginGroupOverride_STATUS(destination *v20230501s.OriginGroupOverride_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(override.PropertyBag)
+
+	// ForwardingProtocol
+	destination.ForwardingProtocol = genruntime.ClonePointerToString(override.ForwardingProtocol)
+
+	// OriginGroup
+	if override.OriginGroup != nil {
+		var originGroup v20230501s.ResourceReference_STATUS
+		err := override.OriginGroup.AssignProperties_To_ResourceReference_STATUS(&originGroup)
+		if err != nil {
+			return errors.Wrap(err, "calling AssignProperties_To_ResourceReference_STATUS() to populate field OriginGroup")
+		}
+		destination.OriginGroup = &originGroup
+	} else {
+		destination.OriginGroup = nil
+	}
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForOriginGroupOverride_STATUS interface (if implemented) to customize the conversion
+	var overrideAsAny any = override
+	if augmentedOverride, ok := overrideAsAny.(augmentConversionForOriginGroupOverride_STATUS); ok {
+		err := augmentedOverride.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.UrlSigningParamIdentifier
 // Defines how to identify a parameter for a specific purpose e.g. expires
 type UrlSigningParamIdentifier struct {
@@ -1584,12 +15562,166 @@ type UrlSigningParamIdentifier struct {
 	PropertyBag    genruntime.PropertyBag `json:"$propertyBag,omitempty"`
 }
 
+// AssignProperties_From_UrlSigningParamIdentifier populates our UrlSigningParamIdentifier from the provided source UrlSigningParamIdentifier
+func (identifier *UrlSigningParamIdentifier) AssignProperties_From_UrlSigningParamIdentifier(source *v20230501s.UrlSigningParamIdentifier) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// ParamIndicator
+	identifier.ParamIndicator = genruntime.ClonePointerToString(source.ParamIndicator)
+
+	// ParamName
+	identifier.ParamName = genruntime.ClonePointerToString(source.ParamName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		identifier.PropertyBag = propertyBag
+	} else {
+		identifier.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningParamIdentifier interface (if implemented) to customize the conversion
+	var identifierAsAny any = identifier
+	if augmentedIdentifier, ok := identifierAsAny.(augmentConversionForUrlSigningParamIdentifier); ok {
+		err := augmentedIdentifier.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlSigningParamIdentifier populates the provided destination UrlSigningParamIdentifier from our UrlSigningParamIdentifier
+func (identifier *UrlSigningParamIdentifier) AssignProperties_To_UrlSigningParamIdentifier(destination *v20230501s.UrlSigningParamIdentifier) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(identifier.PropertyBag)
+
+	// ParamIndicator
+	destination.ParamIndicator = genruntime.ClonePointerToString(identifier.ParamIndicator)
+
+	// ParamName
+	destination.ParamName = genruntime.ClonePointerToString(identifier.ParamName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningParamIdentifier interface (if implemented) to customize the conversion
+	var identifierAsAny any = identifier
+	if augmentedIdentifier, ok := identifierAsAny.(augmentConversionForUrlSigningParamIdentifier); ok {
+		err := augmentedIdentifier.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
 // Storage version of v1api20210601.UrlSigningParamIdentifier_STATUS
 // Defines how to identify a parameter for a specific purpose e.g. expires
 type UrlSigningParamIdentifier_STATUS struct {
 	ParamIndicator *string                `json:"paramIndicator,omitempty"`
 	ParamName      *string                `json:"paramName,omitempty"`
 	PropertyBag    genruntime.PropertyBag `json:"$propertyBag,omitempty"`
+}
+
+// AssignProperties_From_UrlSigningParamIdentifier_STATUS populates our UrlSigningParamIdentifier_STATUS from the provided source UrlSigningParamIdentifier_STATUS
+func (identifier *UrlSigningParamIdentifier_STATUS) AssignProperties_From_UrlSigningParamIdentifier_STATUS(source *v20230501s.UrlSigningParamIdentifier_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(source.PropertyBag)
+
+	// ParamIndicator
+	identifier.ParamIndicator = genruntime.ClonePointerToString(source.ParamIndicator)
+
+	// ParamName
+	identifier.ParamName = genruntime.ClonePointerToString(source.ParamName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		identifier.PropertyBag = propertyBag
+	} else {
+		identifier.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningParamIdentifier_STATUS interface (if implemented) to customize the conversion
+	var identifierAsAny any = identifier
+	if augmentedIdentifier, ok := identifierAsAny.(augmentConversionForUrlSigningParamIdentifier_STATUS); ok {
+		err := augmentedIdentifier.AssignPropertiesFrom(source)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesFrom() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+// AssignProperties_To_UrlSigningParamIdentifier_STATUS populates the provided destination UrlSigningParamIdentifier_STATUS from our UrlSigningParamIdentifier_STATUS
+func (identifier *UrlSigningParamIdentifier_STATUS) AssignProperties_To_UrlSigningParamIdentifier_STATUS(destination *v20230501s.UrlSigningParamIdentifier_STATUS) error {
+	// Clone the existing property bag
+	propertyBag := genruntime.NewPropertyBag(identifier.PropertyBag)
+
+	// ParamIndicator
+	destination.ParamIndicator = genruntime.ClonePointerToString(identifier.ParamIndicator)
+
+	// ParamName
+	destination.ParamName = genruntime.ClonePointerToString(identifier.ParamName)
+
+	// Update the property bag
+	if len(propertyBag) > 0 {
+		destination.PropertyBag = propertyBag
+	} else {
+		destination.PropertyBag = nil
+	}
+
+	// Invoke the augmentConversionForUrlSigningParamIdentifier_STATUS interface (if implemented) to customize the conversion
+	var identifierAsAny any = identifier
+	if augmentedIdentifier, ok := identifierAsAny.(augmentConversionForUrlSigningParamIdentifier_STATUS); ok {
+		err := augmentedIdentifier.AssignPropertiesTo(destination)
+		if err != nil {
+			return errors.Wrap(err, "calling augmented AssignPropertiesTo() for conversion")
+		}
+	}
+
+	// No error
+	return nil
+}
+
+type augmentConversionForCacheConfiguration interface {
+	AssignPropertiesFrom(src *v20230501s.CacheConfiguration) error
+	AssignPropertiesTo(dst *v20230501s.CacheConfiguration) error
+}
+
+type augmentConversionForCacheConfiguration_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.CacheConfiguration_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.CacheConfiguration_STATUS) error
+}
+
+type augmentConversionForOriginGroupOverride interface {
+	AssignPropertiesFrom(src *v20230501s.OriginGroupOverride) error
+	AssignPropertiesTo(dst *v20230501s.OriginGroupOverride) error
+}
+
+type augmentConversionForOriginGroupOverride_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.OriginGroupOverride_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.OriginGroupOverride_STATUS) error
+}
+
+type augmentConversionForUrlSigningParamIdentifier interface {
+	AssignPropertiesFrom(src *v20230501s.UrlSigningParamIdentifier) error
+	AssignPropertiesTo(dst *v20230501s.UrlSigningParamIdentifier) error
+}
+
+type augmentConversionForUrlSigningParamIdentifier_STATUS interface {
+	AssignPropertiesFrom(src *v20230501s.UrlSigningParamIdentifier_STATUS) error
+	AssignPropertiesTo(dst *v20230501s.UrlSigningParamIdentifier_STATUS) error
 }
 
 func init() {

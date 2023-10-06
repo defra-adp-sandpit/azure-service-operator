@@ -817,6 +817,22 @@ objectModelConfiguration:
         $exportAs: RedisEnterpriseDatabase
         $supportedFrom: v2.3.0
   cdn:
+    2023-05-01:        
+      EndpointProperties_WebApplicationFirewallPolicyLink:
+        Id:
+          $armReference: true
+      Profile:
+        $export: true
+        $supportedFrom: v2.3.1
+      Profiles_Endpoint:
+        $exportAs: ProfilesEndpoint
+        $supportedFrom: v2.3.1        
+      Profiles_RuleSet:
+        $exportAs: ProfilesRuleSet
+        $supportedFrom: v2.3.1
+      Profiles_RuleSets_Rule:
+        $exportAs: ProfilesRuleSetRule
+        $supportedFrom: v2.3.1  
     2021-06-01:
       DeepCreatedOriginGroup:
         $isResource: false  # TODO[breaking]: This actually is a resource but we initially had it in our model so leaving it here for now

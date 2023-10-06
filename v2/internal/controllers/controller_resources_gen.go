@@ -38,6 +38,8 @@ import (
 	cdn_customizations "github.com/Azure/azure-service-operator/v2/api/cdn/customizations"
 	cdn_v20210601 "github.com/Azure/azure-service-operator/v2/api/cdn/v1api20210601"
 	cdn_v20210601s "github.com/Azure/azure-service-operator/v2/api/cdn/v1api20210601storage"
+	cdn_v20230501 "github.com/Azure/azure-service-operator/v2/api/cdn/v1api20230501"
+	cdn_v20230501s "github.com/Azure/azure-service-operator/v2/api/cdn/v1api20230501storage"
 	cdn_v1beta20210601 "github.com/Azure/azure-service-operator/v2/api/cdn/v1beta20210601"
 	cdn_v1beta20210601s "github.com/Azure/azure-service-operator/v2/api/cdn/v1beta20210601storage"
 	compute_customizations "github.com/Azure/azure-service-operator/v2/api/compute/customizations"
@@ -305,8 +307,9 @@ func getKnownStorageTypes() []*registration.StorageType {
 	result = append(result, &registration.StorageType{Obj: new(cache_v20230401s.RedisPatchSchedule)})
 	result = append(result, &registration.StorageType{Obj: new(cache_v20230701s.RedisEnterprise)})
 	result = append(result, &registration.StorageType{Obj: new(cache_v20230701s.RedisEnterpriseDatabase)})
-	result = append(result, &registration.StorageType{Obj: new(cdn_v20210601s.Profile)})
-	result = append(result, &registration.StorageType{Obj: new(cdn_v20210601s.ProfilesEndpoint)})
+	result = append(result, &registration.StorageType{Obj: new(cdn_v20230501s.Profile)})
+	result = append(result, &registration.StorageType{Obj: new(cdn_v20230501s.ProfilesEndpoint)})
+	result = append(result, &registration.StorageType{Obj: new(cdn_v20230501s.ProfilesRuleSet)})
 	result = append(result, &registration.StorageType{Obj: new(compute_v20200930s.Disk)})
 	result = append(result, &registration.StorageType{Obj: new(compute_v20200930s.Snapshot)})
 	result = append(result, &registration.StorageType{Obj: new(compute_v20220301s.Image)})
@@ -998,6 +1001,16 @@ func getKnownTypes() []client.Object {
 	result = append(result, new(cdn_v1beta20210601s.Profile), new(cdn_v1beta20210601s.ProfilesEndpoint))
 	result = append(result, new(cdn_v20210601.Profile), new(cdn_v20210601.ProfilesEndpoint))
 	result = append(result, new(cdn_v20210601s.Profile), new(cdn_v20210601s.ProfilesEndpoint))
+	result = append(
+		result,
+		new(cdn_v20230501.Profile),
+		new(cdn_v20230501.ProfilesEndpoint),
+		new(cdn_v20230501.ProfilesRuleSet))
+	result = append(
+		result,
+		new(cdn_v20230501s.Profile),
+		new(cdn_v20230501s.ProfilesEndpoint),
+		new(cdn_v20230501s.ProfilesRuleSet))
 	result = append(result, new(compute_v1beta20200930.Disk), new(compute_v1beta20200930.Snapshot))
 	result = append(result, new(compute_v1beta20200930s.Disk), new(compute_v1beta20200930s.Snapshot))
 	result = append(result, new(compute_v1beta20201201.VirtualMachine), new(compute_v1beta20201201.VirtualMachineScaleSet))
@@ -1681,6 +1694,8 @@ func createScheme() *runtime.Scheme {
 	_ = cdn_v1beta20210601s.AddToScheme(scheme)
 	_ = cdn_v20210601.AddToScheme(scheme)
 	_ = cdn_v20210601s.AddToScheme(scheme)
+	_ = cdn_v20230501.AddToScheme(scheme)
+	_ = cdn_v20230501s.AddToScheme(scheme)
 	_ = compute_v1beta20200930.AddToScheme(scheme)
 	_ = compute_v1beta20200930s.AddToScheme(scheme)
 	_ = compute_v1beta20201201.AddToScheme(scheme)
@@ -1851,6 +1866,7 @@ func getResourceExtensions() []genruntime.ResourceExtension {
 	result = append(result, &cache_customizations.RedisPatchScheduleExtension{})
 	result = append(result, &cdn_customizations.ProfileExtension{})
 	result = append(result, &cdn_customizations.ProfilesEndpointExtension{})
+	result = append(result, &cdn_customizations.ProfilesRuleSetExtension{})
 	result = append(result, &compute_customizations.DiskEncryptionSetExtension{})
 	result = append(result, &compute_customizations.DiskExtension{})
 	result = append(result, &compute_customizations.ImageExtension{})

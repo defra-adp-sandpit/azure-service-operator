@@ -4,7 +4,6 @@
 package v1beta20210601storage
 
 import (
-	"fmt"
 	v20210601s "github.com/Azure/azure-service-operator/v2/api/cdn/v1api20210601storage"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime"
 	"github.com/Azure/azure-service-operator/v2/pkg/genruntime/conditions"
@@ -45,22 +44,36 @@ var _ conversion.Convertible = &Profile{}
 
 // ConvertFrom populates our Profile from the provided hub Profile
 func (profile *Profile) ConvertFrom(hub conversion.Hub) error {
-	source, ok := hub.(*v20210601s.Profile)
-	if !ok {
-		return fmt.Errorf("expected cdn/v1api20210601storage/Profile but received %T instead", hub)
+	// intermediate variable for conversion
+	var source v20210601s.Profile
+
+	err := source.ConvertFrom(hub)
+	if err != nil {
+		return errors.Wrap(err, "converting from hub to source")
 	}
 
-	return profile.AssignProperties_From_Profile(source)
+	err = profile.AssignProperties_From_Profile(&source)
+	if err != nil {
+		return errors.Wrap(err, "converting from source to profile")
+	}
+
+	return nil
 }
 
 // ConvertTo populates the provided hub Profile from our Profile
 func (profile *Profile) ConvertTo(hub conversion.Hub) error {
-	destination, ok := hub.(*v20210601s.Profile)
-	if !ok {
-		return fmt.Errorf("expected cdn/v1api20210601storage/Profile but received %T instead", hub)
+	// intermediate variable for conversion
+	var destination v20210601s.Profile
+	err := profile.AssignProperties_To_Profile(&destination)
+	if err != nil {
+		return errors.Wrap(err, "converting to destination from profile")
+	}
+	err = destination.ConvertTo(hub)
+	if err != nil {
+		return errors.Wrap(err, "converting from destination to hub")
 	}
 
-	return profile.AssignProperties_To_Profile(destination)
+	return nil
 }
 
 var _ genruntime.KubernetesResource = &Profile{}
